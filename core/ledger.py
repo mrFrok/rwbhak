@@ -45,7 +45,7 @@ def _pair(debit: str, credit: str, amount: Decimal, kind: str) -> list[Entry]:
 
 def acceptance(size_code: str, pvz_id: int, qty: int = 1) -> list[Entry]:
     size = P.get_size(size_code)
-    amount = q(P.MESH_ACCEPTANCE * size.k_op * qty)
+    amount = q(P.MESH_ACCEPTANCE * size.ops_factor * qty)
     return _pair(MARKETPLACE, pvz_account(pvz_id), amount, "ACCEPTANCE")
 
 
@@ -60,7 +60,7 @@ def storage(size_code: str, pvz_id: int, seller_id: int, days: int) -> list[Entr
 
 def picking(size_code: str, pvz_id: int) -> list[Entry]:
     size = P.get_size(size_code)
-    return _pair(MARKETPLACE, pvz_account(pvz_id), q(P.MESH_PICKING * size.k_op), "PICKING")
+    return _pair(MARKETPLACE, pvz_account(pvz_id), q(P.MESH_PICKING * size.ops_factor), "PICKING")
 
 
 def issue(size_code: str, pvz_id: int, mode: str, storage_days: int = P.MESH_STORAGE_DAYS) -> list[Entry]:
@@ -114,7 +114,7 @@ def return_event(
     entries: list[Entry] = []
     if reverse_picking:
         entries += _pair(
-            pvz_account(pvz_id), MARKETPLACE, q(P.MESH_PICKING * size.k_op), "RETURN_PICKING_REVERSAL"
+            pvz_account(pvz_id), MARKETPLACE, q(P.MESH_PICKING * size.ops_factor), "RETURN_PICKING_REVERSAL"
         )
     if reverse_bonus:
         entries += _pair(

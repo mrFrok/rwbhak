@@ -12,10 +12,10 @@ def hub_cost(size_code: str, storage_days: int = P.HUB_STORAGE_DAYS) -> Decimal:
     """Устранимые затраты базовой схемы: обработка, хранение, два плеча."""
     size = P.get_size(size_code)
     return q(
-        P.HUB_PROCESSING * size.k_op
+        P.HUB_PROCESSING * size.ops_factor
         + P.HUB_STORAGE_PER_UM_DAY * size.um * storage_days
-        + P.HUB_LINEHAUL * size.k_tr
-        + P.HUB_LAST_MILE * size.k_tr
+        + P.HUB_LINEHAUL * size.freight_factor
+        + P.HUB_LAST_MILE * size.freight_factor
     )
 
 
@@ -23,9 +23,9 @@ def pvz_operations_cost(size_code: str, storage_days: int = P.MESH_STORAGE_DAYS)
     """Выплаты ПВЗ за операции: приёмка + хранение + сборка."""
     size = P.get_size(size_code)
     return q(
-        P.MESH_ACCEPTANCE * size.k_op
+        P.MESH_ACCEPTANCE * size.ops_factor
         + P.MESH_STORAGE_PER_UM_DAY * size.um * storage_days
-        + P.MESH_PICKING * size.k_op
+        + P.MESH_PICKING * size.ops_factor
     )
 
 

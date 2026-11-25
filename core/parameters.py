@@ -23,8 +23,8 @@ class SizeClass:
     code: str
     title: str
     um: int
-    k_op: Decimal
-    k_tr: Decimal
+    ops_factor: Decimal
+    freight_factor: Decimal
     labor_minutes: int
     overhead: Decimal
     returns_reserve: Decimal
@@ -43,17 +43,17 @@ MESH_SIZE_CODES = ("S", "M")
 SPECIAL_SIZE = "KGT"
 
 # --- Базовая схема через хаб, ₽ на заказ -------------------------------------
-HUB_PROCESSING = Decimal("25")          # × k_op
+HUB_PROCESSING = Decimal("25")          # × ops_factor
 HUB_STORAGE_PER_UM_DAY = Decimal("3")
 HUB_STORAGE_DAYS = 3
-HUB_LINEHAUL = Decimal("40")            # × k_tr, продавец → хаб
-HUB_LAST_MILE = Decimal("35")           # × k_tr, хаб → ПВЗ
+HUB_LINEHAUL = Decimal("40")            # × freight_factor, продавец → хаб
+HUB_LAST_MILE = Decimal("35")           # × freight_factor, хаб → ПВЗ
 
 # --- Mesh: операции в ПВЗ, ₽ на заказ ---------------------------------------
-MESH_ACCEPTANCE = Decimal("10")         # × k_op
+MESH_ACCEPTANCE = Decimal("10")         # × ops_factor
 MESH_STORAGE_PER_UM_DAY = Decimal("3")  # ПВЗ получает с 1-го дня
 MESH_STORAGE_DAYS = 3
-MESH_PICKING = Decimal("21")            # × k_op
+MESH_PICKING = Decimal("21")            # × ops_factor
 ON_TIME_BONUS_PCT = Decimal("0.10")     # +10% к выплатам ПВЗ за заказ
 SHELF_SALE_BONUS_PCT = Decimal("0.05")  # режим A, +5% к выплатам за операции
 

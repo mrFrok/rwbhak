@@ -187,7 +187,7 @@ class Clock(Base):
     now: Mapped[datetime] = mapped_column(DateTime)
 
 
-class Alert_(Base):
+class Alert(Base):
     __tablename__ = "alert"
     id: Mapped[int] = mapped_column(primary_key=True)
     batch_id: Mapped[int] = mapped_column(ForeignKey("batch.id"))
