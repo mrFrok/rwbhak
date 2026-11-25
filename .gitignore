@@ -1,0 +1,65 @@
+# --- ОС и редакторы ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# --- Секреты и локальные настройки ---
+.env
+.env.*
+!.env.example
+*.local
+secrets/
+
+# --- Логи и временные файлы ---
+*.log
+logs/
+tmp/
+.cache/
+
+# --- Node / JS / TS ---
+node_modules/
+dist/
+build/
+.next/
+.nuxt/
+.output/
+coverage/
+*.tsbuildinfo
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# --- Go ---
+/vendor/
+*.test
+*.out
+
+# --- Rust ---
+/target/
+
+# --- Java / Kotlin ---
+*.class
+.gradle/
+out/
+*.jar
+
+# --- Данные и артефакты ---
+data/raw/
+*.sqlite
+*.db
+*.parquet
+*.zip
+models/checkpoints/
