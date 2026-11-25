@@ -106,8 +106,8 @@ rwbhak/
 │   ├── breakeven.py       # пороги рейса, зоны плотности
 │   ├── ledger.py          # проводки, идемпотентность
 │   └── simulation.py      # прогон двух схем на одном наборе заказов
-├── api/                   # FastAPI, SQLAlchemy, миграции
-├── ui/                    # интерфейсы ПВЗ, продавца, «Модель»
+├── api/                   # FastAPI, SQLAlchemy, create_all + seed для демо
+├── ui/                    # React: интерфейсы ПВЗ, продавца, «Модель»
 ├── data/seed.py           # генератор синтетики (seed = 42)
 ├── tests/                 # pytest
 ├── docs/                  # business-model.md, mvp-spec.md, img/
@@ -120,10 +120,10 @@ rwbhak/
 
 | Слой | Выбор | Причина |
 | --- | --- | --- |
-| Язык | Python 3.11 | Один язык для `core`, API и симулятора |
+| Язык | Python 3.12 + TypeScript | Python для `core`, API и симулятора; TypeScript для UI |
 | API | FastAPI + Pydantic | Swagger из коробки |
 | БД | PostgreSQL (SQLite для локальных тестов) | Простая схема, транзакции для ledger |
-| UI | Streamlit, страницы «ПВЗ», «Продавец», «Модель» | Быстрее всего даёт рабочие экраны, UI ходит в API по HTTP |
+| UI | React + Vite + Ant Design, TanStack Query, Recharts | Экраны «ПВЗ», «Продавец», «Модель»; UI получает расчёты по HTTP |
 | Запуск | Docker Compose, `make up` | Требование задания |
 | Тесты | pytest | Сценарии и формулы |
 
@@ -349,7 +349,7 @@ cp .env.example .env
 docker compose up --build      # db + api + ui
 make seed                      # синтетические данные
 make test                      # pytest
-# API: http://localhost:8000/docs   UI: http://localhost:8501
+# API: http://localhost:8000/docs   UI: http://localhost:8090
 ```
 
 ---
@@ -386,7 +386,7 @@ make test                      # pytest
 
 | Время | A. Аналитик | B. Backend | C. Frontend и инфра |
 | --- | --- | --- | --- |
-| **14:00–17:00** | Слайды 1–4, график, реестр допущений | `core/parameters.py`, `economics.py`, `breakeven.py` + тесты на числа из документа | Репозиторий, `docker-compose` (db/api/ui), каркас Streamlit, черновик `seed.py` |
+| **14:00–17:00** | Слайды 1–4, график, реестр допущений | `core/parameters.py`, `economics.py`, `breakeven.py` + тесты на числа из документа | Репозиторий, `docker-compose` (db/api/ui), каркас React, черновик `seed.py` |
 | **17:00–19:30** | Репетиция, ответы на вопросы, правки по обратной связи | `solver.py` с фильтрами и объяснением | `seed.py` готов, пустые страницы ПВЗ и продавца |
 | **19:30–20:00** | Финальная проверка слайдов | Готовность ответить про маршрутизацию | Готовность ответить про процесс |
 | **20:00** | **Чекпоинт 1** | | |

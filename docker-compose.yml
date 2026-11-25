@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: rwb
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rwb}
+      POSTGRES_DB: rwb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rwb -d rwb"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg://rwb:${POSTGRES_PASSWORD:-rwb}@db:5432/rwb
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8000:8000"
+    command: >
+      sh -c "python -m data.seed &&
+             exec uvicorn api.main:app --host 0.0.0.0 --port 8000"
+
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:${UI_PORT:-8090}:80"
+
+volumes:
+  pgdata:
