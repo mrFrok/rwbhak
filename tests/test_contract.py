@@ -52,7 +52,7 @@ def test_batch_receipt_and_capacity_error(client):
     free_before = client.get("/pvz/1/stock").json()["free_um"]
     denied = client.post(
         "/batches",
-        json={**payload, "qty": free_before + 1},
+        json={**payload, "qty": free_before + 1, "distribute": False},
         headers=key("receipt-2"),
     )
     assert denied.status_code == 409

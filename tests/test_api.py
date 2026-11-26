@@ -211,7 +211,7 @@ def test_batch_capacity_limit(client):
     sku = _sku(client, "M")
     response = client.post(
         "/api/batches",
-        json={"sku_id": sku["id"], "pvz_id": 1, "qty": 500, "declared_class": "M"},
+        json={"sku_id": sku["id"], "pvz_id": 1, "qty": 500, "declared_class": "M", "distribute": False},
         headers=key("batch-big"),
     )
     assert response.status_code == 409

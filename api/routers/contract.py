@@ -43,6 +43,7 @@ class ClockView(BaseModel):
 class ReceiveIn(BatchIn):
     model_config = ConfigDict(extra="forbid")
     seller_id: int = Field(gt=0)
+    distribute: bool = True  # остаток автоматически распределяется по ПВЗ города
 
 
 class Posting(BaseModel):
@@ -53,11 +54,15 @@ class Posting(BaseModel):
 
 class Receipt(BaseModel):
     batch_id: int
-    status: Literal["ACCEPTED"] = "ACCEPTED"
+    status: Literal["ACCEPTED", "PARTIAL"] = "ACCEPTED"
     qty: int
     um_occupied: int
     free_um_after: int
     ledger: list[Posting]
+    accepted_qty: int | None = None
+    unplaced_qty: int = 0
+    partial: bool = False
+    allocations: list[dict] = []
 
 
 class OrderCreateIn(OrderIn):
@@ -198,6 +203,11 @@ def receive_batch(
         batch_id=result["id"], qty=result["qty"], um_occupied=result["um_total"],
         free_um_after=result["space_free_after_um"],
         ledger=[_posting(row) for row in _postings(db, key_prefix=key)],
+        status="PARTIAL" if result.get("partial") else "ACCEPTED",
+        accepted_qty=result.get("accepted_qty"),
+        unplaced_qty=result.get("unplaced_qty", 0),
+        partial=bool(result.get("partial")),
+        allocations=result.get("allocations", []),
     )
 
 

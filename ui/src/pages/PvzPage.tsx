@@ -281,7 +281,11 @@ function IntakeTab({ pvzId }: { pvzId?: number }) {
             showIcon
             style={{ marginBottom: 16 }}
             message="Приёмку оплачивает маркетплейс: 10 ₽ × k_оп за единицу."
-            description={`Свободно ${stock.data?.space_free_um ?? "—"} УМ. При нехватке места приёмка блокируется.`}
+            description={
+              `Свободно ${stock.data?.space_free_um ?? "—"} УМ. ` +
+              "Если партия не влезает целиком, система примет сколько помещается, " +
+              "а остаток автоматически разложит по другим ПВЗ этого города."
+            }
           />
           <Button type="primary" htmlType="submit" icon={<InboxOutlined aria-hidden="true" />} loading={receive.isPending}>
             Принять партию
@@ -290,15 +294,41 @@ function IntakeTab({ pvzId }: { pvzId?: number }) {
       </Card>
       <Card size="small" className="grow" title="Результат приёмки">
         {last ? (
-          <Descriptions column={1} size="small">
-            <Descriptions.Item label="Партия">#{String(last.id)}</Descriptions.Item>
-            <Descriptions.Item label="Единиц">{String(last.qty)}</Descriptions.Item>
-            <Descriptions.Item label="Занято">{String(last.um_total)} УМ</Descriptions.Item>
-            <Descriptions.Item label="Выплата ПВЗ">{fmtRub(Number(last.acceptance_payout))}</Descriptions.Item>
-            <Descriptions.Item label="Осталось места">
-              {String(last.space_free_after_um)} УМ
-            </Descriptions.Item>
-          </Descriptions>
+          <div className="stack">
+            <Descriptions column={1} size="small">
+              <Descriptions.Item label="Принято">{String(last.accepted_qty ?? last.qty)} шт</Descriptions.Item>
+              <Descriptions.Item label="Размещено в ПВЗ">
+                {Array.isArray(last.allocations) ? (last.allocations as unknown[]).length : 1}
+              </Descriptions.Item>
+              <Descriptions.Item label="Не размещено">
+                {String(last.unplaced_qty ?? 0)} шт
+              </Descriptions.Item>
+              <Descriptions.Item label="Выплата ПВЗ">{fmtRub(Number(last.acceptance_payout))}</Descriptions.Item>
+            </Descriptions>
+            {Array.isArray(last.allocations) && (last.allocations as Array<Record<string, unknown>>).length > 0 && (
+              <Table
+                size="small"
+                rowKey="batch_id"
+                pagination={false}
+                dataSource={last.allocations as Array<Record<string, unknown>>}
+                columns={[
+                  { title: "ПВЗ", dataIndex: "pvz_name" },
+                  { title: "Город", dataIndex: "city" },
+                  { title: "Партия", dataIndex: "batch_id", render: (v: number) => `#${v}` },
+                  { title: "Штук", dataIndex: "qty" },
+                  { title: "УМ", dataIndex: "um" },
+                ]}
+              />
+            )}
+            {Number(last.unplaced_qty ?? 0) > 0 && (
+              <Alert
+                type="warning"
+                showIcon
+                message={`Не размещено ${last.unplaced_qty} шт`}
+                description="В городе закончилось свободное место. Остаток остаётся у продавца — в реальности он поедет на хаб."
+              />
+            )}
+          </div>
         ) : (
           <Empty description="Примите партию, чтобы увидеть расчёт" image={Empty.PRESENTED_IMAGE_SIMPLE} />
         )}

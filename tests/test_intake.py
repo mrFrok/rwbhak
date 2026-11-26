@@ -86,8 +86,26 @@ def test_without_distribute_still_rejects_oversized_batch(client):
         headers=key("partial-4"),
         json={
             "seller_id": sku["seller_id"], "sku_id": sku["id"], "pvz_id": 1,
-            "qty": 500, "declared_class": "S",
+            "qty": 500, "declared_class": "S", "distribute": False,
         },
     )
     assert response.status_code == 409
     assert "места" in response.json()["detail"]
+
+
+def test_default_intake_distributes_automatically(client):
+    sku = _sku(client)
+    response = client.post(
+        "/api/batches",
+        headers=key("partial-auto"),
+        json={
+            "seller_id": sku["seller_id"], "sku_id": sku["id"], "pvz_id": 1,
+            "qty": 500, "declared_class": "S",
+        },
+    )
+    assert response.status_code == 201, response.text
+    body = response.json()
+    assert body["partial"] is True
+    assert body["distributed"] is True
+    assert {row["city"] for row in body["allocations"]} == {"Пермь"}
+    assert body["accepted_qty"] + body["unplaced_qty"] == 500
