@@ -15,7 +15,7 @@ from core import parameters as params
 from ..db import get_db
 from ..errors import DomainError
 from ..models import EventLog, LedgerEntry, Order
-from ..money import rub
+from ..money import plain, rub
 from ..schemas import BatchIn, OrderIn, TimeIn
 from ..services import clock, idempotency
 from ..services import orders as order_service
@@ -375,15 +375,34 @@ def mutual_map() -> object:
 
 class SimulateIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    overrides: dict[str, float] = Field(default_factory=dict)
+    overrides: dict[str, float | int | bool] = Field(default_factory=dict)
 
 
 @router.post("/simulate", tags=["contract: model"])
-def simulate(body: SimulateIn) -> object:
-    # Пересчёт с произвольными overrides делает core.analysis Даниила;
-    # пока опубликуем только сводку доступных параметров реестра.
-    raise DomainError(
-        503, "MODEL_UNAVAILABLE",
-        "Пересчёт модели с overrides будет подключён к core.analysis после публикации отчёта",
-        supported_overrides=[row.id for row in assumptions()],
-    )
+def simulate(body: SimulateIn) -> dict:
+    from dataclasses import fields, replace
+    from decimal import Decimal
+
+    from core.model import ModelParams, run_avg
+
+    known = {item.name for item in fields(ModelParams)}
+    unknown = sorted(key for key in body.overrides if key not in known)
+    if unknown:
+        raise DomainError(
+            422, "VALIDATION_ERROR", "Неизвестные параметры пересчёта",
+            fields=unknown, allowed=sorted(known),
+        )
+    converted = {}
+    for key, value in body.overrides.items():
+        current = getattr(ModelParams(), key)
+        if isinstance(current, Decimal):
+            converted[key] = Decimal(str(value))
+        elif isinstance(current, bool):
+            converted[key] = bool(value)
+        elif isinstance(current, int):
+            converted[key] = int(value)
+        else:
+            converted[key] = float(value)
+    params = replace(ModelParams(), **converted)
+    result = run_avg(params)
+    return plain(result)

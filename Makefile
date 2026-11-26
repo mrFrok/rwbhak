@@ -1,7 +1,7 @@
 PY ?= .venv/bin/python
 PIP ?= .venv/bin/pip
 
-.PHONY: help install up down logs seed reset-demo test dev-api dev-ui build-ui
+.PHONY: help install up down logs seed reset-demo test report dev-api dev-ui build-ui
 
 help:
 	@echo "make install   — создать venv и поставить Python-зависимости"
@@ -9,6 +9,7 @@ help:
 	@echo "make seed      — заполнить пустую БД в контейнере api"
 	@echo "make reset-demo — удалить данные демо и начать заново"
 	@echo "make test      — pytest (ядро + API)"
+	@echo "make report    — пересчитать модель и reports/model_report.md"
 	@echo "make dev-api   — API на localhost:8000 с автоперезагрузкой"
 	@echo "make dev-ui    — Vite на localhost:5173"
 	@echo "make build-ui  — production-сборка интерфейса"
@@ -36,6 +37,9 @@ reset-demo:
 
 test:
 	$(PY) -m pytest -q
+
+report:
+	$(PY) -m scripts.build_report
 
 dev-api:
 	$(PY) -m uvicorn api.main:app --reload --port 8000

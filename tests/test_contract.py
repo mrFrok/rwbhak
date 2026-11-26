@@ -191,11 +191,23 @@ def test_bad_transition_and_validation(client):
     assert missing.status_code == 400  # нет Idempotency-Key
 
 
-def test_model_endpoints_wait_for_published_report(client):
-    for path in ("/compare", "/model/sensitivity", "/model/scenarios", "/model/map"):
+def test_model_endpoints_read_published_report(client):
+    comparison = client.get("/compare")
+    assert comparison.status_code == 200, comparison.text
+    data = comparison.json()
+    assert {"hub", "dedicated", "along", "rows"} <= set(data)
+    assert data["along"]["saving_month"] > 0
+
+    for path in ("/model/sensitivity", "/model/scenarios", "/model/map"):
         response = client.get(path)
-        assert response.status_code == 503
-        assert response.json()["error"] == "MODEL_UNAVAILABLE"
-    simulate = client.post("/simulate", json={"overrides": {"orders_per_day": 80}}, headers=key("sim-1"))
-    assert simulate.status_code == 503
-    assert simulate.json()["error"] == "MODEL_UNAVAILABLE"
+        assert response.status_code == 200, response.text
+
+    check = client.post("/simulate", json={"overrides": {"orders_per_day": 80}}, headers=key("sim-1"))
+    assert check.status_code == 200, check.text
+    payload = check.json()
+    assert payload["orders"] > 0 and "saving_month" in payload
+
+    bad = client.post("/simulate", json={"overrides": {"unknown_field": 1}}, headers=key("sim-2"))
+    assert bad.status_code == 422
+    assert bad.json()["error"] == "VALIDATION_ERROR"
+    assert "unknown_field" in bad.json()["context"]["fields"]
