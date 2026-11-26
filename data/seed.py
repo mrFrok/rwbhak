@@ -27,6 +27,13 @@ PVZ_DATA = (
     (3, "ПВЗ Мира", "пр-т Мира, 12", 2),
     (4, "ПВЗ Набережная", "ул. Набережная, 7", 2),
     (5, "ПВЗ Тверская", "ул. Тверская, 9", 3),
+    (6, "ПВЗ Октябрьская", "ул. Октябрьская, 21", 1),
+    (7, "ПВЗ Гагарина", "б-р Гагарина, 15", 1),
+    (8, "ПВЗ Северная", "ул. Северная, 3", 2),
+    (9, "ПВЗ Строителей", "ул. Строителей, 44", 1),
+    (10, "ПВЗ Заречная", "ул. Заречная, 8", 2),
+    (11, "ПВЗ Арбат", "ул. Арбат, 14", 3),
+    (12, "ПВЗ Сокол", "Ленинградский пр-т, 76", 3),
 )
 SELLER_NAMES = (
     "ООО «Спорт Шоп»",
@@ -144,7 +151,13 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
     # У каждого ПВЗ свой ассортимент: тогда заказ между соседними ПВЗ —
     # это режим B, а не выдача с полки. Москва (pvz 5) полки не имеет:
     # заказы туда дальние и уходят в хаб.
-    pvz_slices = {1: mesh_skus[0:10], 2: mesh_skus[10:20], 3: mesh_skus[20:30], 4: mesh_skus[30:37]}
+    pvz_slices = {
+        1: mesh_skus[0:10], 2: mesh_skus[10:20], 3: mesh_skus[20:30], 4: mesh_skus[30:37],
+        # Дополнительные точки: ассортимент пересекается с соседями — это нормально
+        # для ходовых SKU и делает перераспределение внутри города наглядным.
+        6: mesh_skus[0:8], 7: mesh_skus[8:16], 8: mesh_skus[20:28],
+        9: mesh_skus[10:19], 10: mesh_skus[23:27], 11: mesh_skus[8:12], 12: mesh_skus[16:20],
+    }
     for pvz in pvz_by_id.values():
         selected = pvz_slices.get(pvz.id, [])
         for index, sku in enumerate(selected):
@@ -288,6 +301,12 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
             add_issued(pvz_slices[3][(index + 3) % len(pvz_slices[3])], source_id=3, buyer_id=1, days_ago=day)
     add_issued(pvz_slices[1][7], source_id=1, buyer_id=2, days_ago=2)
     add_issued(pvz_slices[3][0], source_id=3, buyer_id=5, days_ago=2, mode="C")
+
+    # История продаж новых точек: у прогноза спроса должен быть материал.
+    for pvz_id in (6, 7, 8, 9, 10):
+        popular = pvz_slices[pvz_id][0]
+        for day in range(1, 4):
+            add_issued(popular, source_id=pvz_id, buyer_id=pvz_id, days_ago=day, mode="A")
 
     db.commit()
     return {

@@ -59,7 +59,7 @@ def test_distribution_stays_within_one_city(client):
     cities = {row["city"] for row in response["allocations"]}
     pvz_ids = {row["pvz_id"] for row in response["allocations"]}
     assert cities == {"Пермь"}
-    assert pvz_ids <= {1, 2}
+    assert pvz_ids <= {1, 2, 6, 7, 9}
     assert response["unplaced_qty"] > 0
 
 
