@@ -9,14 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ant-design/icons": "^5.5.1",
     "@tanstack/react-query": "^5.108.4",
     "antd": "^5.29.3",
+    "dayjs": "^1.11.13",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
+    "react-is": "^18.3.1",
     "react-router-dom": "^6.30.6",
-    "recharts": "^2.15.4",
-    "@ant-design/icons": "^5.5.1",
-    "dayjs": "^1.11.13"
+    "recharts": "^3.11.1"
   },
   "devDependencies": {
     "@types/node": "^26.6.11",
