@@ -69,7 +69,7 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
     rng = _rng()
     now = clock.now(db)
 
-    cities = [City(name=name) for name in CITY_NAMES]
+    cities = [City(id=index, name=name) for index, name in enumerate(CITY_NAMES, 1)]
     db.add_all(cities)
     db.flush()
     perm, solikamsk, _moscow = cities
@@ -87,7 +87,7 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
         db.add(pvz)
         pvz_by_id[pvz_id] = pvz
 
-    sellers = [Seller(name=name, contact=f"contact-{i}@example.test") for i, name in enumerate(SELLER_NAMES, 1)]
+    sellers = [Seller(id=i, name=name, contact=f"contact-{i}@example.test") for i, name in enumerate(SELLER_NAMES, 1)]
     db.add_all(sellers)
     db.flush()
 
@@ -105,6 +105,7 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
         price = rng.randint(900, 12000)
         skus.append(
             Sku(
+                id=index + 1,
                 seller_id=seller.id,
                 name=f"{SKU_NAMES[index % len(SKU_NAMES)]} #{index + 1}",
                 price_kop=price * 100,
