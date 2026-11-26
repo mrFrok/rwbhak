@@ -315,3 +315,48 @@ export interface ParamRow {
   note: string;
   kind: string;
 }
+
+export interface ForecastItem {
+  sku_id: number;
+  sku: string;
+  seller_id: number;
+  size_class: string;
+  um: number;
+  sold: number;
+  mean_daily: number;
+  forecast_units: number;
+  stock: number;
+  incoming: number;
+  recommended: number;
+  recommended_um: number;
+  reason: string;
+}
+
+export interface PvzForecast {
+  pvz_id: number;
+  pvz_name: string;
+  window_days: number;
+  coverage_days: number;
+  free_um: number;
+  items: ForecastItem[];
+  note: string;
+}
+
+export interface PvzRecommendation {
+  pvz_id: number;
+  pvz_name: string;
+  city: string;
+  demand: number;
+  stock: number;
+  free_um: number;
+  score: number;
+  hint?: string;
+}
+
+export interface SellerRecommendation {
+  seller_id: number;
+  sku_id: number;
+  sku: string;
+  items: PvzRecommendation[];
+  note: string;
+}

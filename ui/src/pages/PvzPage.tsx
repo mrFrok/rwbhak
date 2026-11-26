@@ -39,6 +39,7 @@ import {
   useCreateOrder,
   useLedger,
   useOrderAction,
+  useForecast,
   useOrders,
   usePlanTrip,
   usePvzAnalytics,
@@ -49,7 +50,7 @@ import {
   useTripAction,
   useTrips,
 } from "../api/hooks";
-import type { Order, Pvz, Sku, Trip } from "../api/types";
+import type { ForecastItem, Order, Pvz, Sku, Trip } from "../api/types";
 import {
   DecisionCard,
   DecisionDrawer,
@@ -110,6 +111,7 @@ export default function PvzPage() {
           { key: "stock", label: "Склад", children: <StockTab pvzId={pvzId} /> },
           { key: "intake", label: "Приёмка", children: <IntakeTab pvzId={pvzId} /> },
           { key: "orders", label: "Заказы", children: <OrdersTab pvzId={pvzId} /> },
+          { key: "forecast", label: "Прогноз", children: <ForecastTab pvzId={pvzId} /> },
           { key: "trips", label: "Рейсы", children: <TripsTab pvzId={pvzId} /> },
           { key: "analytics", label: "Аналитика", children: <AnalyticsTab pvzId={pvzId} /> },
         ]}
@@ -883,6 +885,105 @@ function AnalyticsTab({ pvzId }: { pvzId?: number }) {
             { title: "Сумма", dataIndex: "amount", align: "right", render: (v: number) => <span className="num">{fmtRub(v)}</span> },
           ]}
         />
+      </Card>
+    </div>
+  );
+}
+
+
+function ForecastTab({ pvzId }: { pvzId?: number }) {
+  const forecast = useForecast(pvzId);
+  const intake = useReceiveBatch();
+  const [placing, setPlacing] = useState<number | null>(null);
+
+  const place = (item: ForecastItem) => {
+    if (!pvzId) return;
+    setPlacing(item.sku_id);
+    intake.mutate(
+      {
+        seller_id: item.seller_id,
+        sku_id: item.sku_id,
+        pvz_id: pvzId,
+        qty: item.recommended,
+        declared_class: item.size_class,
+        distribute: true,
+      },
+      {
+        onSuccess: (result) => {
+          const allocations = (result.allocations as unknown[] | undefined) ?? [];
+          const unplaced = Number(result.unplaced_qty ?? 0);
+          message.success(
+            `Принято ${result.accepted_qty} шт; размещено в ${allocations.length} ПВЗ` +
+              (unplaced ? `; не размещено ${unplaced}` : ""),
+          );
+        },
+        onError: (error) => message.error(error.message),
+        onSettled: () => setPlacing(null),
+      },
+    );
+  };
+
+  return (
+    <div className="stack">
+      <Alert
+        type="info"
+        showIcon
+        message="Прогноз по истории заказов"
+        description={forecast.data?.note ?? "Средние продажи за окно истории × дни покрытия; остаток и заказы в пути вычитаются."}
+      />
+      <Card
+        size="small"
+        title={`Что завезти · покрытие ${forecast.data?.coverage_days ?? 3} дн`}
+        extra={<span className="muted">Свободно {forecast.data?.free_um ?? "—"} УМ</span>}
+      >
+        <Table
+          size="small"
+          rowKey="sku_id"
+          loading={forecast.isLoading}
+          dataSource={forecast.data?.items ?? []}
+          pagination={false}
+          scroll={{ x: 980 }}
+          columns={[
+            { title: "SKU", dataIndex: "sku" },
+            { title: "Класс", dataIndex: "size_class", width: 70 },
+            { title: "Продано", dataIndex: "sold", width: 90, align: "right" },
+            { title: "В день", dataIndex: "mean_daily", width: 90, align: "right", render: (v: number) => <span className="num">{v.toFixed(2)}</span> },
+            { title: "Прогноз", dataIndex: "forecast_units", width: 90, align: "right" },
+            { title: "На полке", dataIndex: "stock", width: 100, align: "right" },
+            { title: "В пути", dataIndex: "incoming", width: 90, align: "right" },
+            {
+              title: "Завезти",
+              dataIndex: "recommended",
+              width: 110,
+              align: "right",
+              render: (value: number, row: ForecastItem) => (
+                <span className="num" style={{ fontWeight: 600, color: value > 0 ? "#16A34A" : "#52627A" }}>
+                  {value} шт · {row.recommended_um} УМ
+                </span>
+              ),
+            },
+            {
+              title: "",
+              key: "action",
+              width: 130,
+              render: (_: unknown, row: ForecastItem) =>
+                row.recommended > 0 ? (
+                  <Button
+                    size="small"
+                    type="primary"
+                    loading={placing === row.sku_id}
+                    onClick={() => place(row)}
+                  >
+                    Завезти
+                  </Button>
+                ) : null,
+            },
+          ]}
+        />
+        <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+          «Завезти» моделирует поставку рекомендуемого количества: сначала в выбранный ПВЗ,
+          остаток автоматически распределяется по другим точкам города и коридора.
+        </div>
       </Card>
     </div>
   );

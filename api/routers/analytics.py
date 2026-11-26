@@ -16,6 +16,7 @@ from ..money import plain, rub
 from ..schemas import SimulateIn
 from ..services import clock
 from ..services.analytics import pvz_analytics, seller_analytics
+from ..services.forecast import pvz_forecast, seller_recommendations
 
 router = APIRouter(tags=["analytics"])
 
@@ -81,3 +82,19 @@ def threshold() -> dict[str, object]:
         "threshold": threshold_orders,
         "points": points,
     }
+
+
+@router.get("/forecast/pvz/{pvz_id}")
+def forecast_pvz(
+    pvz_id: int, window_days: int = 30, coverage_days: int = 3,
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return pvz_forecast(db, pvz_id, window_days=window_days, coverage_days=coverage_days)
+
+
+@router.get("/seller/{seller_id}/recommend-pvz")
+def recommend_pvz(
+    seller_id: int, sku_id: int, window_days: int = 30, limit: int = 3,
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    return seller_recommendations(db, seller_id, sku_id, window_days=window_days, limit=limit)

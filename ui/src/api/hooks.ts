@@ -2,6 +2,8 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "./client";
 import type {
   AlertRow,
+  PvzForecast,
+  SellerRecommendation,
   ModelCompare,
   ModelScenarios,
   MutualMap,
@@ -124,6 +126,8 @@ export function useReceiveBatch() {
       qty: number;
       declared_class: string;
       actual_class?: string;
+      seller_id?: number;
+      distribute?: boolean;
     }) => post<Record<string, unknown>>("/batches", body),
     onSuccess: invalidate,
   });
@@ -196,3 +200,18 @@ export function useModelSimulate() {
       post<SchemeMetrics>("/model/simulate", { overrides }),
   });
 }
+
+
+export const useForecast = (pvzId?: number, coverageDays = 3) =>
+  useQuery({
+    queryKey: ["forecast", pvzId, coverageDays],
+    queryFn: () => get<PvzForecast>(`/forecast/pvz/${pvzId}?coverage_days=${coverageDays}`),
+    enabled: Boolean(pvzId),
+  });
+
+export const useRecommendPvz = (sellerId?: number, skuId?: number) =>
+  useQuery({
+    queryKey: ["recommend-pvz", sellerId, skuId],
+    queryFn: () => get<SellerRecommendation>(`/seller/${sellerId}/recommend-pvz?sku_id=${skuId}`),
+    enabled: Boolean(sellerId && skuId),
+  });
