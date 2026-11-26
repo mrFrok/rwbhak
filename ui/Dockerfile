@@ -1,8 +1,11 @@
-FROM node:22-alpine AS build
+FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+# VITE_USE_MOCK=1 — стартовать с заглушками; 0 — сразу с API
+ARG VITE_USE_MOCK=1
+ENV VITE_USE_MOCK=$VITE_USE_MOCK
 RUN npm run build
 
 FROM nginx:1.27-alpine
