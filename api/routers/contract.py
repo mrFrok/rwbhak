@@ -108,10 +108,18 @@ def _model_hour(at: datetime) -> float:
     return (at - clock.DEFAULT_START).total_seconds() / 3600
 
 
-def _postings(db: Session, *, key: str | None = None, order_id: int | None = None):
+def _postings(
+    db: Session,
+    *,
+    key: str | None = None,
+    key_prefix: str | None = None,
+    order_id: int | None = None,
+):
     query = select(LedgerEntry).order_by(LedgerEntry.id)
     if key is not None:
         query = query.where(LedgerEntry.idempotency_key == key)
+    if key_prefix is not None:
+        query = query.where(LedgerEntry.idempotency_key.like(f"{key_prefix}%"))
     if order_id is not None:
         query = query.where(LedgerEntry.order_id == order_id)
     return db.scalars(query).all()
@@ -189,7 +197,7 @@ def receive_batch(
     return Receipt(
         batch_id=result["id"], qty=result["qty"], um_occupied=result["um_total"],
         free_um_after=result["space_free_after_um"],
-        ledger=[_posting(row) for row in _postings(db, key=key)],
+        ledger=[_posting(row) for row in _postings(db, key_prefix=key)],
     )
 
 

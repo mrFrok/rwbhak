@@ -12,7 +12,7 @@ from ..db import get_db
 from ..errors import DomainError
 from ..models import Batch, Order, Pvz, Sku
 from ..schemas import BatchIn
-from ..services import clock, idempotency, ledger_store
+from ..services import clock, idempotency, intake, ledger_store
 from ..services.orders import pvz_space, pvz_stock
 
 router = APIRouter(tags=["stock"])
@@ -49,64 +49,17 @@ def receive_batch(
         raise DomainError(409, "SIZE_NOT_ALLOWED", "Этот товар не допускается к хранению в ПВЗ")
 
     at = clock.now(db)
-    candidates = db.scalars(select(Batch).where(
-        Batch.pvz_id == pvz.id, Batch.sku_id == sku.id, Batch.qty_free > 0,
-    )).all()
-    for candidate in candidates:
-        age = (at - candidate.received_at).days
-        sold = db.scalar(select(Order.id).where(
-            Order.batch_id == candidate.id, Order.issued_at.is_not(None),
-        ).limit(1))
-        if age >= P.REMOVAL_DAY or (age >= P.NO_SALES_ALERT_DAY and sold is None):
-            raise HTTPException(409, "Пополнение заблокировано: есть залежавшийся остаток этого SKU")
-
-    need_um = size.um * body.qty
-    free_um = pvz_space(db, pvz.id)
-    if need_um > free_um:
-        raise DomainError(
-            409, "CAPACITY", f"Не хватает места: нужно {need_um} УМ, свободно {free_um} УМ",
-            free_um=free_um, needed_um=need_um,
-        )
-
-    if actual == "M":
-        medium_qty = sum(db.scalars(select(Batch.qty).where(
-            Batch.pvz_id == pvz.id, Batch.actual_class == "M",
-        )))
-        medium_free = max(0, int(pvz.available_um * P.PVZ_M_UM_SHARE_LIMIT) - medium_qty * size.um)
-        if need_um > medium_free:
-            raise DomainError(
-                409, "CAPACITY", "Превышен лимит места под товары класса M",
-                free_um=medium_free, needed_um=need_um,
-            )
-    batch = Batch(
-        sku_id=sku.id,
-        pvz_id=pvz.id,
+    result = intake.receive(
+        db,
+        sku=sku,
+        target=pvz,
         qty=body.qty,
-        qty_free=body.qty,
-        received_at=at,
         declared_class=body.declared_class,
-        actual_class=actual,
+        actual=actual,
+        distribute=body.distribute,
+        key=key,
+        at=at,
     )
-    db.add(batch)
-    db.flush()
-    # Тариф приёмки считаем по фактическому классу (пересчёт S → M по v0.3).
-    entries = L.acceptance(actual, pvz.id, body.qty)
-    ledger_store.post(db, entries, key, at)
-
-    result = {
-        "id": batch.id,
-        "sku_id": sku.id,
-        "pvz_id": pvz.id,
-        "qty": batch.qty,
-        "qty_free": batch.qty_free,
-        "received_at": batch.received_at.isoformat(),
-        "size_class": actual,
-        "declared_class": batch.declared_class,
-        "actual_class": batch.actual_class,
-        "um_total": need_um,
-        "acceptance_payout": float(entries[1].amount),
-        "space_free_after_um": pvz_space(db, pvz.id),
-    }
     idempotency.remember(db, key, fp, "batch_received", result, at)
     db.commit()
     return result

@@ -12,6 +12,7 @@ class BatchIn(BaseModel):
     qty: int = Field(default=1, gt=0, le=500)
     declared_class: str = "S"
     actual_class: str | None = None
+    distribute: bool = False
 
 
 class OrderIn(BaseModel):
