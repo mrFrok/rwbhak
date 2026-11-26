@@ -1,51 +1,63 @@
 import { ExperimentOutlined } from "@ant-design/icons";
 import {
+  Alert,
   Button,
   Card,
   Col,
   InputNumber,
   Row,
-  Select,
   Space,
   Table,
   Tag,
+  Typography,
   message,
 } from "antd";
 import { useState } from "react";
 import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip as ChartTooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { useCompare, useParams, useSimulate, useThreshold } from "../api/hooks";
-import type { Compare } from "../api/types";
+  useModelCompare,
+  useModelMap,
+  useModelParams,
+  useModelScenarios,
+  useModelSimulate,
+  useModelTornado,
+} from "../api/hooks";
+import type { MutualMap, ParamRow, SchemeMetrics } from "../api/types";
 import { Kpi, SectionTitle, fmtRub } from "../components/ui";
 
-export default function ModelPage() {
-  const [kind, setKind] = useState<"DEDICATED" | "ALONG">("DEDICATED");
-  const [orders, setOrders] = useState(3000);
-  const [seed, setSeed] = useState(42);
-  const compare = useCompare(kind);
-  const threshold = useThreshold();
-  const params = useParams();
-  const simulate = useSimulate();
-  const [result, setResult] = useState<Compare | null>(null);
+const STATUS_COLORS: Record<number, string> = {
+  0: "#E2E8F0",
+  1: "#FDE68A",
+  2: "#86EFAC",
+  3: "#15803D",
+};
+const STATUS_LABELS: Record<number, string> = {
+  0: "mesh не включается",
+  1: "ПВЗ ниже минимума",
+  2: "выигрывают все",
+  3: "покрыты расходы пилота",
+};
 
-  const data = result ?? compare.data;
+export default function ModelPage() {
+  const compare = useModelCompare();
+  const scenarios = useModelScenarios();
+  const tornado = useModelTornado();
+  const map = useModelMap();
+  const params = useModelParams();
+  const simulate = useModelSimulate();
+  const [orders, setOrders] = useState(100);
+  const [tripScale, setTripScale] = useState(1);
+  const [custom, setCustom] = useState<SchemeMetrics | null>(null);
+
+  const base = compare.data?.mesh_with_along;
+  const dedicated = compare.data?.mesh_dedicated_only;
 
   const run = () => {
     simulate.mutate(
-      { orders, seed, kind, days: 30 },
+      { orders_per_day: orders, trip_cost_scale: tripScale },
       {
         onSuccess: (value) => {
-          setResult(value);
-          message.success("Модель пересчитана на том же потоке заказов");
+          setCustom(value);
+          message.success("Модель пересчитана с новыми параметрами");
         },
         onError: (error) => message.error(error.message),
       },
@@ -58,204 +70,252 @@ export default function ModelPage() {
         <div>
           <h1>Модель</h1>
           <p>
-            Две схемы на одном потоке заказов. Сравниваем устранимые затраты, долю mesh и
-            порог окупаемости рейса. Все числа — допущения команды, реестр ниже.
+            Имитационная модель коридора: одни и те же заказы проходят через хаб и через mesh,
+            средние по пяти seed. Числа берутся из <code>reports/results.json</code> и
+            пересчитываются кодом <code>analytic/</code>, а не вводятся руками.
           </p>
         </div>
         <Space wrap>
-          <Select
-            value={kind}
-            onChange={(value) => {
-              setKind(value);
-              setResult(null);
-            }}
+          <InputNumber
+            min={20}
+            max={200}
+            step={10}
+            value={orders}
+            onChange={(value) => setOrders(value ?? 100)}
+            addonAfter="заказов/день"
             style={{ width: 190 }}
-            options={[
-              { value: "DEDICATED", label: "Выделенный рейс" },
-              { value: "ALONG", label: "Попутная загрузка" },
-            ]}
           />
-          <InputNumber min={100} max={10000} step={100} value={orders} onChange={(v) => setOrders(v ?? 3000)} addonAfter="заказов" style={{ width: 190 }} />
-          <InputNumber min={1} max={9999} value={seed} onChange={(v) => setSeed(v ?? 42)} addonBefore="seed" style={{ width: 150 }} />
+          <InputNumber
+            min={0.5}
+            max={2}
+            step={0.05}
+            value={tripScale}
+            onChange={(value) => setTripScale(value ?? 1)}
+            addonBefore="рейс ×"
+            style={{ width: 130 }}
+          />
           <Button type="primary" icon={<ExperimentOutlined aria-hidden="true" />} loading={simulate.isPending} onClick={run}>
             Пересчитать
           </Button>
         </Space>
       </div>
 
-      {data && (
+      {base && dedicated && (
         <>
           <Row gutter={[16, 16]}>
             <Col xs={12} md={6}>
               <Card size="small">
-                <Kpi label="Через хаб" value={fmtRub(data.totals.cost_per_order_hub)} hint="₽ на модельный заказ" />
+                <Kpi label="Через хаб" value={fmtRub(base.base_per_order)} hint="₽ на заказ по потоку" />
               </Card>
             </Col>
             <Col xs={12} md={6}>
               <Card size="small">
-                <Kpi label="Mesh" value={fmtRub(data.totals.cost_per_order_mesh)} hint="₽ на модельный заказ" accent="#EA580C" />
+                <Kpi label="Mesh с попутными" value={fmtRub(base.mesh_per_order)} hint="₽ на заказ" accent="#C2410C" />
               </Card>
             </Col>
             <Col xs={12} md={6}>
               <Card size="small">
                 <Kpi
-                  label="Снижение себестоимости"
-                  value={`${data.totals.saving_pct.toFixed(1)}%`}
-                  hint={`${fmtRub(data.totals.saving)} на потоке`}
-                  accent={data.totals.saving_pct >= 5 ? "#16A34A" : "#D97706"}
+                  label="Экономия маркетплейса"
+                  value={`${fmtRub(base.saving_month)}/мес`}
+                  hint={`${base.saving_pct.toFixed(1)}% к базе`}
+                  accent={base.saving_pct >= 5 ? "#16A34A" : "#D97706"}
                 />
               </Card>
             </Col>
             <Col xs={12} md={6}>
               <Card size="small">
                 <Kpi
-                  label="Доля заказов mesh"
-                  value={`${data.mesh.share_pct.toFixed(1)}%`}
-                  hint={`${data.mesh.orders} из ${data.flow_orders}, рейсов: ${data.mesh.trips}`}
+                  label="После постоянных расходов"
+                  value={`${fmtRub(base.net_after_fixed_month)}/мес`}
+                  hint="60 000 ₽/мес на пилот"
+                  accent={base.net_after_fixed_month >= 0 ? "#16A34A" : "#DC2626"}
                 />
               </Card>
             </Col>
           </Row>
 
+          {custom && (
+            <Alert
+              type="info"
+              showIcon
+              message={`Пересчёт: ${orders} заказов/день, стоимость рейса × ${tripScale}`}
+              description={`Экономия ${fmtRub(custom.saving_month)}/мес (${custom.saving_pct.toFixed(1)}%), после постоянных ${fmtRub(custom.net_after_fixed_month)}/мес, mesh ${custom.mesh_share_pct.toFixed(1)}%`}
+            />
+          )}
+
           <Card size="small">
-            <SectionTitle hint="Себестоимость заказа S от числа заказов в выделенном рейсе. Горизонтальная линия — цена через хаб.">
-              Порог окупаемости рейса
+            <SectionTitle hint="Сравнение на одном потоке: только выделенные рейсы и с попутной загрузкой.">
+              Схемы
             </SectionTitle>
-            <div style={{ height: 300 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={threshold.data?.points ?? []}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
-                  <XAxis dataKey="orders" type="number" domain={["dataMin", "dataMax"]} tick={{ fontSize: 12 }} label={{ value: "заказов в рейсе", position: "insideBottom", offset: -4, fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} width={64} domain={["auto", "auto"]} />
-                  <ChartTooltip formatter={(value) => fmtRub(typeof value === "number" ? value : undefined)} />
-                  <Legend />
-                  <ReferenceLine y={threshold.data?.points[0]?.hub} stroke="#64748B" strokeDasharray="4 4" label={{ value: "хаб", fontSize: 12, position: "insideTopRight" }} />
-                  <ReferenceLine x={threshold.data?.threshold} stroke="#16A34A" strokeDasharray="4 4" label={{ value: `порог ${threshold.data?.threshold ?? ""}`, fontSize: 12, position: "insideTopRight" }} />
-                  <Line type="monotone" dataKey="mesh" name="Mesh, ₽/заказ" stroke="#2563EB" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+            <Table
+              size="small"
+              rowKey="metric"
+              pagination={false}
+              dataSource={[
+                { metric: "Себестоимость заказа, ₽", dedicated: dedicated.mesh_per_order, along: base.mesh_per_order, raw: true },
+                { metric: "Экономия, ₽/мес", dedicated: dedicated.saving_month, along: base.saving_month, raw: true },
+                { metric: "Экономия, % к базе", dedicated: dedicated.saving_pct, along: base.saving_pct, raw: false },
+                { metric: "После постоянных расходов, ₽/мес", dedicated: dedicated.net_after_fixed_month, along: base.net_after_fixed_month, raw: true },
+                { metric: "Доля заказов через mesh, %", dedicated: dedicated.mesh_share_pct, along: base.mesh_share_pct, raw: false },
+                { metric: "Срок ближнего заказа, ч", dedicated: dedicated.eta_mesh_h, along: base.eta_mesh_h, raw: false },
+                { metric: "Вклад ПВЗ на точку, ₽/мес", dedicated: dedicated.pvz_per_pvz_month, along: base.pvz_per_pvz_month, raw: true },
+                { metric: "Рейсов в месяц (выделенных / попутных)", dedicated: `${dedicated.trips_dedicated} / ${dedicated.trips_along}`, along: `${base.trips_dedicated} / ${base.trips_along}`, raw: true },
+              ]}
+              columns={[
+                { title: "Показатель", dataIndex: "metric" },
+                {
+                  title: "Только выделенные",
+                  dataIndex: "dedicated",
+                  align: "right",
+                  render: (value: number | string, row) =>
+                    typeof value === "number" ? <span className="num">{row.raw ? fmtRub(value) : value.toFixed(1)}</span> : <span className="num">{value}</span>,
+                },
+                {
+                  title: "+ попутная загрузка",
+                  dataIndex: "along",
+                  align: "right",
+                  render: (value: number | string, row) =>
+                    typeof value === "number" ? <span className="num">{row.raw ? fmtRub(value) : value.toFixed(1)}</span> : <span className="num">{value}</span>,
+                },
+              ]}
+            />
+            <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              Зона коридора: <Tag color={base.zone === "GREEN" ? "green" : "gold"}>{base.zone}</Tag>
+              λ = {base.lambda_per_day.toFixed(1)} заказов/день · заказов в прогоне: {base.orders}
             </div>
           </Card>
 
           <div className="row">
-            <Card size="small" className="grow" title="Что входит в сравнение">
+            <Card size="small" className="grow">
+              <SectionTitle hint="Пессимистичный: рейс +25%, хаб −15%, поток −25%, ставки ПВЗ +15%. Оптимистичный — зеркально.">
+                Сценарии
+              </SectionTitle>
               <Table
                 size="small"
+                rowKey="name"
                 pagination={false}
-                rowKey="key"
-                dataSource={[
-                  { key: "flow", label: "Заказов в потоке", value: `${data.flow_orders} · ${data.orders_per_day} в день` },
-                  { key: "hub", label: "Всего через хаб", value: `${data.hub.orders} (${data.hub.share_pct.toFixed(1)}%)` },
-                  { key: "mesh", label: "Всего mesh", value: `${data.mesh.orders} (${data.mesh.share_pct.toFixed(1)}%)` },
-                  { key: "trips", label: "Принято рейсов", value: String(data.mesh.trips) },
-                  { key: "rejected", label: "Рейсов ниже порога", value: String(data.rejected_trips) },
-                  { key: "cost", label: "Стоимость рейса", value: `${fmtRub(data.trip_cost)} (${data.trip_kind === "DEDICATED" ? "выделенный" : "попутный"})` },
-                ]}
+                dataSource={Object.entries(scenarios.data ?? {}).map(([name, row]) => ({ name, ...row }))}
                 columns={[
-                  { title: "Показатель", dataIndex: "label" },
-                  { title: "Значение", dataIndex: "value", align: "right", render: (v: string) => <span className="num">{v}</span> },
+                  { title: "Сценарий", dataIndex: "name" },
+                  { title: "Зона", dataIndex: "zone" },
+                  { title: "Экономия, ₽/мес", dataIndex: "saving_month", align: "right", render: (v: number) => <span className="num">{fmtRub(v)}</span> },
+                  { title: "%", dataIndex: "saving_pct", align: "right", render: (v: number) => `${v.toFixed(1)}%` },
+                  { title: "После постоянных", dataIndex: "net_after_fixed_month", align: "right", render: (v: number) => <span className="num" style={{ color: v >= 0 ? "#16A34A" : "#DC2626" }}>{fmtRub(v)}</span> },
                 ]}
               />
-            </Card>
-
-            <Card size="small" className="grow" title="Пороги из допущений">
-              <div className="stack" style={{ gap: 8 }}>
-                <div>
-                  <span className="muted">Только S:</span>{" "}
-                  <Tag color="blue">{data.thresholds.dedicated_s} выделенный</Tag> <Tag color="orange">{data.thresholds.along_s} попутный</Tag>
-                </div>
-                <div>
-                  <span className="muted">Поток 70% S + 30% M:</span>{" "}
-                  <Tag color="blue">{data.thresholds.dedicated_mixed} выделенный</Tag> <Tag color="orange">{data.thresholds.along_mixed} попутный</Tag>
-                </div>
-                <div className="muted" style={{ fontSize: 12 }}>
-                  Попутная загрузка снижает порог примерно в шесть раз: сравниваем не весь рейс,
-                  а приращение 750 ₽.
-                </div>
-              </div>
             </Card>
           </div>
 
-          {data.pilot && (
-            <Card size="small" title="Экономика пилота: 1 коридор, 4 ПВЗ, 4 рейса в неделю">
-              <div className="row" style={{ marginBottom: 16 }}>
-                <div>
-                  <div className="kpi__label">Средняя экономия до рейса</div>
-                  <div className="num" style={{ fontSize: 20, fontWeight: 600 }}>{fmtRub(data.pilot.avg_saving)}</div>
-                </div>
-                <div>
-                  <div className="kpi__label">Постоянные расходы</div>
-                  <div className="num" style={{ fontSize: 20, fontWeight: 600 }}>{fmtRub(data.pilot.fixed_cost_month)}/мес</div>
-                </div>
-                <div>
-                  <div className="kpi__label">Порог окупаемости пилота</div>
-                  <div className="num" style={{ fontSize: 20, fontWeight: 600 }}>
-                    <Tag color="blue">{data.pilot.breakeven_dedicated} выделенный</Tag>
-                    <Tag color="orange">{data.pilot.breakeven_along} попутный</Tag>
-                  </div>
-                </div>
-              </div>
-              <Table
-                size="small"
-                rowKey="orders"
-                pagination={false}
-                dataSource={data.pilot.rows}
-                columns={[
-                  { title: "Заказов в рейсе", dataIndex: "orders", align: "right", render: (v: number) => <span className="num">{v}</span> },
-                  {
-                    title: "Выделенный, ₽/мес после пост. расходов",
-                    dataIndex: "effect_dedicated",
-                    align: "right",
-                    render: (v: number) => <span className="num" style={{ color: v >= 0 ? "#16A34A" : "#DC2626" }}>{fmtRub(v)}</span>,
-                  },
-                  {
-                    title: "Попутный, ₽/мес после пост. расходов",
-                    dataIndex: "effect_along",
-                    align: "right",
-                    render: (v: number) => <span className="num" style={{ color: v >= 0 ? "#16A34A" : "#DC2626" }}>{fmtRub(v)}</span>,
-                  },
-                ]}
-              />
-              <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
-                Один слабый коридор выделенным транспортом не окупает постоянные затраты;
-                попутная загрузка выводит пилот в плюс уже от {data.pilot.breakeven_along} заказов в рейсе.
-              </div>
-            </Card>
-          )}
+          <Card size="small">
+            <SectionTitle hint="Как меняется экономия при отклонении параметра на ±25%.">
+              Чувствительность
+            </SectionTitle>
+            <Table
+              size="small"
+              rowKey="param"
+              pagination={false}
+              dataSource={tornado.data?.rows ?? []}
+              columns={[
+                { title: "Параметр", dataIndex: "label" },
+                { title: "−25%, ₽/мес", dataIndex: "low", align: "right", render: (v: number) => <span className="num">{fmtRub(v)}</span> },
+                { title: "+25%, ₽/мес", dataIndex: "high", align: "right", render: (v: number) => <span className="num">{fmtRub(v)}</span> },
+                { title: "Размах, ₽/мес", dataIndex: "swing", align: "right", render: (v: number) => <span className="num">{fmtRub(v)}</span> },
+              ]}
+            />
+            <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
+              База: {fmtRub(tornado.data?.base)}/мес. Самый чувствительный параметр — {tornado.data?.rows[0]?.label.toLowerCase()}.
+            </div>
+          </Card>
 
-          {data.sensitivity && data.sensitivity.length > 0 && (
-            <Card size="small" title="Чувствительность: ±20% к параметрам">
-              <Table
-                size="small"
-                rowKey={(row) => `${row.parameter}-${row.delta_pct}`}
-                pagination={false}
-                dataSource={data.sensitivity}
-                columns={[
-                  { title: "Параметр", dataIndex: "parameter" },
-                  { title: "Изменение", dataIndex: "delta_pct", align: "right", render: (v: number) => `${v > 0 ? "+" : ""}${v}%` },
-                  { title: "₽/заказ", dataIndex: "cost_per_order", align: "right", render: (v: number) => <span className="num">{fmtRub(v)}</span> },
-                  { title: "К базе", dataIndex: "saving_vs_base_pct", align: "right", render: (v: number) => `${v > 0 ? "+" : ""}${v.toFixed(1)}%` },
-                ]}
-              />
-            </Card>
-          )}
+          <Card size="small">
+            <SectionTitle hint="Ось X — ставки ПВЗ к базовым, ось Y — заказов в день. Наведите на ячейку, чтобы увидеть значение.">
+              Зона взаимной выгоды
+            </SectionTitle>
+            <MutualMapGrid map={map.data} />
+            <Space wrap size={16} style={{ marginTop: 12 }}>
+              {Object.entries(STATUS_LABELS).map(([code, label]) => (
+                <span key={code} style={{ fontSize: 12 }}>
+                  <span className="mode-dot" style={{ background: STATUS_COLORS[Number(code)], marginRight: 6 }} />
+                  {label}
+                </span>
+              ))}
+            </Space>
+          </Card>
         </>
       )}
 
-      <Card size="small" title="Реестр допущений">
+      <Card size="small">
+        <SectionTitle hint="Все ставки — допущения команды, не тарифы RWB. Меняются в analytic/parameters.py.">
+          Реестр допущений
+        </SectionTitle>
         <Table
           size="small"
-          rowKey="code"
-          pagination={{ pageSize: 10, hideOnSinglePage: true }}
-          dataSource={params.data?.assumptions ?? []}
+          rowKey="id"
+          pagination={{ pageSize: 12, hideOnSinglePage: true }}
+          dataSource={params.data ?? []}
           columns={[
-            { title: "Код", dataIndex: "code", width: 200, render: (v: string) => <code>{v}</code> },
-            { title: "Допущение", dataIndex: "name" },
-            { title: "Значение", key: "value", width: 180, render: (_: unknown, row) => <span className="num">{`${row.value} ${row.unit}`}</span> },
-            { title: "Источник", dataIndex: "source", width: 220 },
+            { title: "ID", dataIndex: "id", width: 70, render: (v: string) => <code>{v}</code> },
+            { title: "Параметр", dataIndex: "name", width: 200, render: (v: string) => <code>{v}</code> },
+            {
+              title: "Значение",
+              key: "value",
+              width: 140,
+              render: (_: unknown, row: ParamRow) => (
+                <span className="num">
+                  {Array.isArray(row.value)
+                    ? row.value.join(", ")
+                    : typeof row.value === "number" && !Number.isInteger(row.value)
+                      ? row.value.toFixed(2)
+                      : String(row.value)}{" "}
+                  {row.unit}
+                </span>
+              ),
+            },
+            { title: "Пояснение", dataIndex: "note" },
           ]}
         />
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+          {params.data?.length ?? 0} параметров · источник: GET /params
+        </Typography.Text>
       </Card>
+    </div>
+  );
+}
+
+function MutualMapGrid({ map }: { map?: MutualMap }) {
+  if (!map) {
+    return <div className="muted">Загрузка карты…</div>;
+  }
+  const rows = map.orders_per_day;
+  const fees = map.pvz_fee_scale;
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <table style={{ borderCollapse: "collapse", fontSize: 11 }}>
+        <tbody>
+          {rows.map((opd, y) => (
+            <tr key={opd}>
+              <th style={{ padding: "2px 8px", textAlign: "right", color: "#52627A", fontWeight: 500 }}>{opd}</th>
+              {fees.map((fee, x) => {
+                const status = map.grid[y]?.[x] ?? 0;
+                return (
+                  <td
+                    key={fee}
+                    title={`${opd} заказов/день, ставки ПВЗ ×${fee}: ${STATUS_LABELS[status]}`}
+                    style={{ width: 26, height: 20, background: STATUS_COLORS[status], border: "1px solid #fff" }}
+                  />
+                );
+              })}
+            </tr>
+          ))}
+          <tr>
+            <th />
+            {fees.map((fee) => (
+              <th key={fee} style={{ padding: "4px 2px", color: "#52627A", fontWeight: 500 }}>{fee}</th>
+            ))}
+          </tr>
+        </tbody>
+      </table>
     </div>
   );
 }

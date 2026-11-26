@@ -2,6 +2,12 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { get, post } from "./client";
 import type {
   AlertRow,
+  ModelCompare,
+  ModelScenarios,
+  MutualMap,
+  ParamRow,
+  SchemeMetrics,
+  Tornado,
   Compare,
   Ledger,
   Order,
@@ -166,5 +172,27 @@ export function useSimulate() {
   return useMutation({
     mutationFn: (body: { orders: number; seed: number; kind: "DEDICATED" | "ALONG"; days: number }) =>
       post<Compare>("/simulate", body),
+  });
+}
+
+export const useModelCompare = () =>
+  useQuery({ queryKey: ["model-compare"], queryFn: () => get<ModelCompare>("/model/compare") });
+
+export const useModelScenarios = () =>
+  useQuery({ queryKey: ["model-scenarios"], queryFn: () => get<ModelScenarios>("/model/scenarios") });
+
+export const useModelTornado = () =>
+  useQuery({ queryKey: ["model-tornado"], queryFn: () => get<Tornado>("/model/sensitivity") });
+
+export const useModelMap = () =>
+  useQuery({ queryKey: ["model-map"], queryFn: () => get<MutualMap>("/model/map") });
+
+export const useModelParams = () =>
+  useQuery({ queryKey: ["model-params"], queryFn: () => get<ParamRow[]>("/model/params") });
+
+export function useModelSimulate() {
+  return useMutation({
+    mutationFn: (overrides: Record<string, number>) =>
+      post<SchemeMetrics>("/model/simulate", { overrides }),
   });
 }

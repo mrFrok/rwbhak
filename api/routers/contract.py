@@ -384,3 +384,12 @@ def simulate(body: SimulateIn) -> dict:
             converted[key] = float(value)
     result = run_avg(replace(base, **converted))
     return plain(result)
+
+
+# Алиасы под префиксом /api: наш UI ходит только по /api/*, а контракт живёт в корне.
+router.add_api_route("/api/model/compare", compare, methods=["GET"], tags=["contract: model"])
+router.add_api_route("/api/model/scenarios", scenarios, methods=["GET"], tags=["contract: model"])
+router.add_api_route("/api/model/sensitivity", sensitivity, methods=["GET"], tags=["contract: model"])
+router.add_api_route("/api/model/map", mutual_map, methods=["GET"], tags=["contract: model"])
+router.add_api_route("/api/model/params", assumptions, methods=["GET"], tags=["contract: model"])
+router.add_api_route("/api/model/simulate", simulate, methods=["POST"], tags=["contract: model"])

@@ -253,3 +253,65 @@ export interface Params {
 export interface TimeInfo {
   now: string;
 }
+
+export interface SchemeMetrics {
+  saving_month: number;
+  saving_pct: number;
+  net_after_fixed_month: number;
+  mesh_share_pct: number;
+  pvz_per_pvz_month: number;
+  pvz_total_month: number;
+  eta_base_h: number;
+  eta_mesh_h: number;
+  base_per_order: number;
+  mesh_per_order: number;
+  trips_dedicated: number;
+  trips_along: number;
+  avg_orders_per_dedicated: number;
+  avg_orders_per_along: number;
+  trip_cost_total_month: number;
+  seller_capital_gain_month: number;
+  lambda_per_day: number;
+  orders: number;
+  zone: string;
+  funnel: Record<string, number>;
+}
+
+export interface ModelCompare {
+  mesh_dedicated_only: SchemeMetrics;
+  mesh_with_along: SchemeMetrics;
+}
+
+export interface ModelScenarios {
+  [name: string]: SchemeMetrics;
+}
+
+export interface TornadoRow {
+  param: string;
+  label: string;
+  low: number;
+  high: number;
+  swing: number;
+}
+
+export interface Tornado {
+  metric: string;
+  base: number;
+  delta: number;
+  rows: TornadoRow[];
+}
+
+export interface MutualMap {
+  orders_per_day: number[];
+  pvz_fee_scale: number[];
+  grid: number[][];
+}
+
+export interface ParamRow {
+  id: string;
+  name: string;
+  value: number | string | boolean | number[];
+  unit: string;
+  note: string;
+  kind: string;
+}
