@@ -1,0 +1,402 @@
+{
+ "cities": [
+  {
+   "id": 1,
+   "name": "Город А"
+  },
+  {
+   "id": 2,
+   "name": "Город Б"
+  }
+ ],
+ "pvz": [
+  {
+   "id": 1,
+   "city_id": 1,
+   "capacity_um": 200.0,
+   "name": "ПВЗ-1"
+  },
+  {
+   "id": 2,
+   "city_id": 1,
+   "capacity_um": 200.0,
+   "name": "ПВЗ-2"
+  },
+  {
+   "id": 3,
+   "city_id": 2,
+   "capacity_um": 200.0,
+   "name": "ПВЗ-3"
+  },
+  {
+   "id": 4,
+   "city_id": 2,
+   "capacity_um": 200.0,
+   "name": "ПВЗ-4"
+  }
+ ],
+ "sellers": [
+  {
+   "id": 1,
+   "name": "Продавец-1"
+  },
+  {
+   "id": 2,
+   "name": "Продавец-2"
+  },
+  {
+   "id": 3,
+   "name": "Продавец-3"
+  },
+  {
+   "id": 4,
+   "name": "Продавец-4"
+  },
+  {
+   "id": 5,
+   "name": "Продавец-5"
+  },
+  {
+   "id": 6,
+   "name": "Продавец-6"
+  },
+  {
+   "id": 7,
+   "name": "Продавец-7"
+  },
+  {
+   "id": 8,
+   "name": "Продавец-8"
+  },
+  {
+   "id": 9,
+   "name": "Продавец-9"
+  },
+  {
+   "id": 10,
+   "name": "Продавец-10"
+  }
+ ],
+ "sku": [
+  {
+   "id": 1,
+   "seller_id": 1,
+   "size_class": "M",
+   "um": 3,
+   "price": 370.0,
+   "unit_cost": 179.0
+  },
+  {
+   "id": 2,
+   "seller_id": 2,
+   "size_class": "S",
+   "um": 1,
+   "price": 2290.0,
+   "unit_cost": 1381.0
+  },
+  {
+   "id": 3,
+   "seller_id": 3,
+   "size_class": "L",
+   "um": 8,
+   "price": 530.0,
+   "unit_cost": 279.0
+  },
+  {
+   "id": 4,
+   "seller_id": 4,
+   "size_class": "S",
+   "um": 1,
+   "price": 890.0,
+   "unit_cost": 491.0
+  },
+  {
+   "id": 5,
+   "seller_id": 5,
+   "size_class": "S",
+   "um": 1,
+   "price": 840.0,
+   "unit_cost": 500.0
+  },
+  {
+   "id": 6,
+   "seller_id": 6,
+   "size_class": "S",
+   "um": 1,
+   "price": 900.0,
+   "unit_cost": 519.0
+  },
+  {
+   "id": 7,
+   "seller_id": 7,
+   "size_class": "M",
+   "um": 3,
+   "price": 320.0,
+   "unit_cost": 205.0
+  },
+  {
+   "id": 8,
+   "seller_id": 8,
+   "size_class": "M",
+   "um": 3,
+   "price": 1220.0,
+   "unit_cost": 545.0
+  },
+  {
+   "id": 9,
+   "seller_id": 9,
+   "size_class": "KGT",
+   "um": 8,
+   "price": 1210.0,
+   "unit_cost": 518.0
+  },
+  {
+   "id": 10,
+   "seller_id": 10,
+   "size_class": "S",
+   "um": 1,
+   "price": 2590.0,
+   "unit_cost": 1505.0
+  },
+  {
+   "id": 11,
+   "seller_id": 1,
+   "size_class": "M",
+   "um": 3,
+   "price": 2270.0,
+   "unit_cost": 1273.0
+  },
+  {
+   "id": 12,
+   "seller_id": 2,
+   "size_class": "KGT",
+   "um": 8,
+   "price": 1320.0,
+   "unit_cost": 747.0
+  },
+  {
+   "id": 13,
+   "seller_id": 3,
+   "size_class": "M",
+   "um": 3,
+   "price": 1970.0,
+   "unit_cost": 1297.0
+  },
+  {
+   "id": 14,
+   "seller_id": 4,
+   "size_class": "S",
+   "um": 1,
+   "price": 2200.0,
+   "unit_cost": 910.0
+  },
+  {
+   "id": 15,
+   "seller_id": 5,
+   "size_class": "S",
+   "um": 1,
+   "price": 1080.0,
+   "unit_cost": 458.0
+  },
+  {
+   "id": 16,
+   "seller_id": 6,
+   "size_class": "S",
+   "um": 1,
+   "price": 570.0,
+   "unit_cost": 276.0
+  },
+  {
+   "id": 17,
+   "seller_id": 7,
+   "size_class": "M",
+   "um": 3,
+   "price": 1290.0,
+   "unit_cost": 659.0
+  },
+  {
+   "id": 18,
+   "seller_id": 8,
+   "size_class": "S",
+   "um": 1,
+   "price": 1020.0,
+   "unit_cost": 695.0
+  },
+  {
+   "id": 19,
+   "seller_id": 9,
+   "size_class": "M",
+   "um": 3,
+   "price": 1940.0,
+   "unit_cost": 876.0
+  },
+  {
+   "id": 20,
+   "seller_id": 10,
+   "size_class": "M",
+   "um": 3,
+   "price": 740.0,
+   "unit_cost": 380.0
+  },
+  {
+   "id": 21,
+   "seller_id": 1,
+   "size_class": "KGT",
+   "um": 8,
+   "price": 2030.0,
+   "unit_cost": 1151.0
+  },
+  {
+   "id": 22,
+   "seller_id": 2,
+   "size_class": "M",
+   "um": 3,
+   "price": 2580.0,
+   "unit_cost": 1633.0
+  },
+  {
+   "id": 23,
+   "seller_id": 3,
+   "size_class": "S",
+   "um": 1,
+   "price": 390.0,
+   "unit_cost": 193.0
+  },
+  {
+   "id": 24,
+   "seller_id": 4,
+   "size_class": "S",
+   "um": 1,
+   "price": 870.0,
+   "unit_cost": 594.0
+  },
+  {
+   "id": 25,
+   "seller_id": 5,
+   "size_class": "L",
+   "um": 8,
+   "price": 1150.0,
+   "unit_cost": 686.0
+  },
+  {
+   "id": 26,
+   "seller_id": 6,
+   "size_class": "S",
+   "um": 1,
+   "price": 2770.0,
+   "unit_cost": 1489.0
+  },
+  {
+   "id": 27,
+   "seller_id": 7,
+   "size_class": "S",
+   "um": 1,
+   "price": 970.0,
+   "unit_cost": 551.0
+  },
+  {
+   "id": 28,
+   "seller_id": 8,
+   "size_class": "S",
+   "um": 1,
+   "price": 1880.0,
+   "unit_cost": 1258.0
+  },
+  {
+   "id": 29,
+   "seller_id": 9,
+   "size_class": "S",
+   "um": 1,
+   "price": 890.0,
+   "unit_cost": 622.0
+  },
+  {
+   "id": 30,
+   "seller_id": 10,
+   "size_class": "S",
+   "um": 1,
+   "price": 550.0,
+   "unit_cost": 228.0
+  },
+  {
+   "id": 31,
+   "seller_id": 1,
+   "size_class": "S",
+   "um": 1,
+   "price": 1990.0,
+   "unit_cost": 1269.0
+  },
+  {
+   "id": 32,
+   "seller_id": 2,
+   "size_class": "S",
+   "um": 1,
+   "price": 470.0,
+   "unit_cost": 242.0
+  },
+  {
+   "id": 33,
+   "seller_id": 3,
+   "size_class": "KGT",
+   "um": 8,
+   "price": 1730.0,
+   "unit_cost": 1196.0
+  },
+  {
+   "id": 34,
+   "seller_id": 4,
+   "size_class": "M",
+   "um": 3,
+   "price": 330.0,
+   "unit_cost": 203.0
+  },
+  {
+   "id": 35,
+   "seller_id": 5,
+   "size_class": "M",
+   "um": 3,
+   "price": 1750.0,
+   "unit_cost": 840.0
+  },
+  {
+   "id": 36,
+   "seller_id": 6,
+   "size_class": "M",
+   "um": 3,
+   "price": 600.0,
+   "unit_cost": 318.0
+  },
+  {
+   "id": 37,
+   "seller_id": 7,
+   "size_class": "S",
+   "um": 1,
+   "price": 2880.0,
+   "unit_cost": 1909.0
+  },
+  {
+   "id": 38,
+   "seller_id": 8,
+   "size_class": "S",
+   "um": 1,
+   "price": 1650.0,
+   "unit_cost": 748.0
+  },
+  {
+   "id": 39,
+   "seller_id": 9,
+   "size_class": "L",
+   "um": 8,
+   "price": 2650.0,
+   "unit_cost": 1297.0
+  },
+  {
+   "id": 40,
+   "seller_id": 10,
+   "size_class": "M",
+   "um": 3,
+   "price": 1940.0,
+   "unit_cost": 865.0
+  }
+ ]
+}
