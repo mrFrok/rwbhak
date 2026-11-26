@@ -7,7 +7,7 @@ from decimal import Decimal
 
 from . import parameters as P
 from .economics import (
-    hub_cost,
+    baseline_cost,
     mesh_saving,
     mesh_variable_cost,
     trip_cost,
@@ -71,11 +71,12 @@ def _filter(code: str, title: str, ok: bool, actual: object, limit: object) -> F
 def decide(req: OrderRequest) -> dict[str, object]:
     """Вернуть режим, оценки и полный список фильтров."""
     size = P.get_size(req.size_class)
-    hub = hub_cost(req.size_class)
+    distance_ok = req.distance_km <= P.MAX_MESH_DISTANCE_KM
+    hub = baseline_cost(req.size_class, distant=not distance_ok)
     eta_hub = P.HUB_ETA_H
 
     # Режим A: товар уже лежит в ПВЗ покупателя.
-    shelf_ok = req.same_pvz_stock > 0
+    shelf_ok = req.same_pvz_stock > 0 and size.mesh_allowed and not req.special
     shelf_filter = _filter(
         "shelf", "Товар на полке ПВЗ покупателя", shelf_ok,
         f"в наличии {req.same_pvz_stock} шт", "> 0",
@@ -96,7 +97,6 @@ def decide(req: OrderRequest) -> dict[str, object]:
         }
 
     trip = req.trip
-    distance_ok = req.distance_km <= P.MAX_MESH_DISTANCE_KM
     zone_ok = req.zone_class == P.ZONE_GREEN or (
         req.zone_class == P.ZONE_YELLOW and trip is not None and trip.kind == P.TRIP_KIND_ALONG
     )

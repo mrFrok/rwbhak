@@ -6,9 +6,12 @@ import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .db import init_db
-from .routers import analytics, catalog, orders, stock, trips
+from .errors import handle_http_error, handle_validation_error
+from .routers import analytics, catalog, contract, orders, stock, trips
 
 
 @asynccontextmanager
@@ -29,9 +32,13 @@ app = FastAPI(
 
 for router in (catalog.router, stock.router, orders.router, trips.router, analytics.router):
     app.include_router(router, prefix="/api")
+app.include_router(contract.router)
+app.add_exception_handler(StarletteHTTPException, handle_http_error)
+app.add_exception_handler(RequestValidationError, handle_validation_error)
 
 
 @app.get("/api/health", tags=["system"])
+@app.get("/health", tags=["system"])
 def health() -> dict[str, str]:
     return {"status": "ok"}
 

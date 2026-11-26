@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from core import ledger as L
 from core import parameters as P
 from core.solver import OrderRequest, TripLoad, decide
+from ..errors import DomainError
 from ..models import Batch, Order, Pvz, Sku, Trip, Zone
-from ..money import plain, rub, to_kop
+from ..money import from_kop, plain, rub, to_kop
 from . import ledger_store
 
 
@@ -33,10 +34,8 @@ def pvz_space(db: Session, pvz_id: int) -> int:
 
 
 def _space_usage(db: Session, pvz_id: int) -> tuple[int, int]:
-    rows = db.execute(
-        select(Batch, Sku).join(Sku, Batch.sku_id == Sku.id).where(Batch.pvz_id == pvz_id)
-    ).all()
-    used = sum(batch.qty * sku.um for batch, sku in rows)
+    rows = db.scalars(select(Batch).where(Batch.pvz_id == pvz_id))
+    used = sum(batch.qty * P.get_size(batch.actual_class).um for batch in rows)
     incoming = sum(db.scalars(select(Order.um).where(
         Order.buyer_pvz_id == pvz_id,
         Order.mode == "B",
@@ -76,8 +75,9 @@ def pvz_stock(db: Session, pvz_id: int) -> dict[str, object]:
                 "id": batch.id,
                 "sku_id": sku.id,
                 "sku": sku.name,
-                "size_class": sku.size_class,
-                "um": sku.um,
+                "size_class": batch.actual_class,
+                "um": P.get_size(batch.actual_class).um,
+                "seller_id": sku.seller_id,
                 "qty": batch.qty,
                 "qty_free": batch.qty_free,
                 "received_at": batch.received_at.isoformat(),
@@ -122,7 +122,7 @@ def _trips_for(db: Session, source: Pvz, buyer: Pvz) -> list[Trip]:
     trips = db.scalars(
         select(Trip)
         .options(
-            selectinload(Trip.orders).selectinload(Order.sku),
+            selectinload(Trip.orders).selectinload(Order.batch),
             joinedload(Trip.from_pvz),
             joinedload(Trip.to_pvz),
         )
@@ -167,13 +167,13 @@ def _evaluate(
             kind=trip.kind,
             free_um=trip.free_um,
             existing_sizes=tuple(
-                order.sku.size_class for order in trip.orders if order.status != "CANCELLED"
+                order.batch.actual_class for order in trip.orders if order.status != "CANCELLED"
             ),
             wait_hours=wait_hours,
         )
         decision = decide(
             OrderRequest(
-                size_class=sku.size_class,
+                size_class=batch.actual_class,
                 special=sku.special,
                 distance_km=distance,
                 zone_class=zone_class,
@@ -190,7 +190,7 @@ def _evaluate(
         return None, last_decision
     return None, decide(
         OrderRequest(
-            size_class=sku.size_class,
+            size_class=batch.actual_class,
             special=sku.special,
             distance_km=distance,
             zone_class=zone_class,
@@ -210,7 +210,7 @@ def order_payload(order: Order) -> dict[str, object]:
         "sku": {
             "id": order.sku_id,
             "name": order.sku.name,
-            "size_class": order.sku.size_class,
+            "size_class": order.batch.actual_class,
             "price": rub(order.sku.price_kop),
             "seller_id": order.seller_id,
             "seller": order.seller.name,
@@ -260,7 +260,7 @@ def create_order(
         source_pvz_id=source.id,
         buyer_pvz_id=buyer.id,
         trip_id=trip.id if mode == "B" and trip is not None else None,
-        um=sku.um,
+        um=P.get_size(batch.actual_class).um,
         status="ROUTED_HUB" if mode == "C" else "RESERVED",
         mode=mode,
         eta_mesh_h=decision["eta_mesh_h"],
@@ -296,9 +296,9 @@ def _get_order(db: Session, order_id: int) -> Order:
 def pick(db: Session, order_id: int, key: str, at: datetime) -> dict[str, object]:
     order = _get_order(db, order_id)
     if order.status != "RESERVED":
-        raise HTTPException(409, f"Сборка недоступна в статусе {order.status}")
+        raise DomainError(409, "BAD_TRANSITION", f"Сборка недоступна в статусе {order.status}")
     ledger_store.post(
-        db, L.picking(order.sku.size_class, order.source_pvz_id), key, at, order.id
+        db, L.picking(order.batch.actual_class, order.source_pvz_id), key, at, order.id
     )
     order.status = "PICKED"
     order.picked_at = at
@@ -314,20 +314,18 @@ def issue(db: Session, order_id: int, key: str, at: datetime) -> dict[str, objec
         "C": ("ROUTED_HUB", "PICKED"),
     }[order.mode]
     if order.status not in allowed:
-        raise HTTPException(409, f"Выдача недоступна в статусе {order.status}")
+        raise DomainError(409, "BAD_TRANSITION", f"Выдача недоступна в статусе {order.status}")
 
     days = max(0, (at - order.batch.received_at).days)
-    size = order.sku.size_class
-    entries = L.storage(size, order.source_pvz_id, order.seller_id, days)
+    size = order.batch.actual_class
+    entries = [] if order.mode == "C" else L.storage(size, order.source_pvz_id, order.seller_id, days)
     is_on_time = (at - order.created_at).total_seconds() / 3600 <= order.eta_hub_h
     if order.mode == "A" or is_on_time:
         entries += L.issue(size, order.source_pvz_id, order.mode, days)
     if order.mode == "C":
-        entries += L.hub_route(size)
+        entries += L.hub_route(size, cost=from_kop(order.cost_hub_kop))
     ledger_store.post(db, entries, key, at, order.id)
     order.batch.qty -= 1
-    if order.batch.qty_free > order.batch.qty:
-        order.batch.qty_free = order.batch.qty
     order.status = "ISSUED"
     order.issued_at = at
     db.flush()
@@ -337,7 +335,7 @@ def issue(db: Session, order_id: int, key: str, at: datetime) -> dict[str, objec
 def return_request(db: Session, order_id: int, at: datetime) -> dict[str, object]:
     order = _get_order(db, order_id)
     if order.status != "ISSUED":
-        raise HTTPException(409, "Возврат возможен только для выданного заказа")
+        raise DomainError(409, "BAD_TRANSITION", "Возврат возможен только для выданного заказа")
     order.status = "RETURN_REQUESTED"
     order.returned_at = at
     db.flush()
@@ -347,7 +345,7 @@ def return_request(db: Session, order_id: int, at: datetime) -> dict[str, object
 def return_transit(db: Session, order_id: int, at: datetime) -> dict[str, object]:
     order = _get_order(db, order_id)
     if order.status != "RETURN_REQUESTED":
-        raise HTTPException(409, f"Возврат в пути недоступен в статусе {order.status}")
+        raise DomainError(409, "BAD_TRANSITION", f"Возврат в пути недоступен в статусе {order.status}")
     order.status = "RETURN_IN_TRANSIT"
     db.flush()
     return order_payload(order)
@@ -356,15 +354,15 @@ def return_transit(db: Session, order_id: int, at: datetime) -> dict[str, object
 def return_accept(db: Session, order_id: int, key: str, at: datetime) -> dict[str, object]:
     """Завершение возврата (бизнес-модель v0.3, раздел 12.2).
 
-    Товар остаётся в ПВЗ выдачи, если этот SKU там востребован и есть место;
-    иначе возвращается в партию отправителя (в MVP вывоз на хаб не моделируется).
+    Товар остаётся в ПВЗ выдачи, если такой товар там хранится и есть место;
+    иначе в доступный остаток ПВЗ не возвращается.
     Бонус за выдачу сторнируется, продавец платит обратную логистику 50 ₽.
     """
     order = _get_order(db, order_id)
     if order.status != "RETURN_IN_TRANSIT":
-        raise HTTPException(409, f"Принять возврат в статусе {order.status} нельзя")
+        raise DomainError(409, "BAD_TRANSITION", f"Принять возврат в статусе {order.status} нельзя")
     entries = L.return_event(
-        order.sku.size_class,
+        order.batch.actual_class,
         order.source_pvz_id,
         order.seller_id,
         reverse_picking=order.picked_at is not None,
@@ -374,32 +372,23 @@ def return_accept(db: Session, order_id: int, key: str, at: datetime) -> dict[st
     order.status = "RETURNED"
 
     batch = _restock_batch(db, order)
-    batch.qty_free += 1
+    if batch is not None:
+        batch.qty += 1
+        batch.qty_free += 1
     db.flush()
     return order_payload(order)
 
 
-def _restock_batch(db: Session, order: Order) -> Batch:
-    """Партия для возврата в сток: своя полка ПВЗ выдачи или партия отправителя.
-
-    Партия, из которой заказ был выдан, уже потеряла единицу безвозвратно
-    (`qty -= 1` при выдаче), поэтому для пополнения ищем другую живую партию.
-    """
-    if order.buyer_pvz_id != order.source_pvz_id and pvz_space(db, order.buyer_pvz_id) >= order.sku.um:
-        candidate = db.scalar(
-            select(Batch)
-            .where(
-                Batch.pvz_id == order.buyer_pvz_id,
-                Batch.sku_id == order.sku_id,
-                Batch.qty_free < Batch.qty,
-            )
-            .order_by(Batch.received_at)
-        )
-        if candidate is not None and candidate.id != order.batch.id:
-            return candidate
-    live = db.scalar(
+def _restock_batch(db: Session, order: Order) -> Batch | None:
+    if pvz_space(db, order.buyer_pvz_id) < order.um:
+        return None
+    return db.scalar(
         select(Batch)
-        .where(Batch.sku_id == order.sku_id, Batch.qty_free < Batch.qty)
-        .order_by(Batch.received_at)
+        .where(
+            Batch.pvz_id == order.buyer_pvz_id,
+            Batch.sku_id == order.sku_id,
+            Batch.actual_class == order.batch.actual_class,
+        )
+        .order_by(Batch.received_at.desc(), Batch.id.desc())
+        .limit(1)
     )
-    return live if live is not None else order.batch

@@ -68,6 +68,7 @@ def list_orders(
             joinedload(Order.seller),
             joinedload(Order.source_pvz),
             joinedload(Order.buyer_pvz),
+            joinedload(Order.batch),
         )
         .order_by(Order.created_at.desc(), Order.id.desc())
         .limit(min(limit, 500))

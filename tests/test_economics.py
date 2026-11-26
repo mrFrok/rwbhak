@@ -67,22 +67,23 @@ def test_mode_a_costs_both_bonuses():
     assert E.mesh_saving("M", shelf_sale=True) == D("88.33")
 
 
-def test_seller_margin_matches_v03_example():
+def test_seller_margin_uses_agreed_logistics_tariff():
     # чек 1500 ₽, себестоимость 600 ₽, класс S, продажа на 3-й день
     breakdown = E.seller_margin("S", D("1500"), D("600"), days=3)
     assert breakdown["commission"] == D("225.00")
     assert breakdown["acquiring"] == D("22.50")
-    assert breakdown["logistics"] == D("65.00")
+    assert breakdown["logistics"] == D("60.00")
     assert breakdown["storage"] == D("0")
-    assert breakdown["returns"] == D("5.75")
+    assert breakdown["returns"] == D("5.50")
     assert breakdown["tax"] == D("90.00")
-    assert breakdown["margin"] == D("491.75")
+    assert breakdown["margin"] == D("497.00")
+    assert E.seller_logistics_fee("M") == D("90.00")
 
 
 def test_seller_margin_sixth_day_storage():
     breakdown = E.seller_margin("S", D("1500"), D("600"), days=6)
     assert breakdown["storage"] == D("9.00")
-    assert breakdown["margin"] == D("482.75")
+    assert breakdown["margin"] == D("488.00")
 
 
 def test_pilot_economics_v03():

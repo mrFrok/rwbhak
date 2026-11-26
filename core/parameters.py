@@ -61,6 +61,7 @@ SHELF_SALE_BONUS_PCT = Decimal("0.05")  # режим A, +5% к выплатам 
 TRIP_COST_DEDICATED = Decimal("4500")   # 240 км × 12 ₽ + 6 ч × 270 ₽
 TRIP_COST_ALONG = Decimal("750")        # крюк 40 км + остановка
 TRIP_CAPACITY_UM = 300
+TRIP_ALONG_CAPACITY_UM = 60             # свободное место на уже идущем рейсе
 TRIP_DISTANCE_KM = 120
 TRIP_KIND_DEDICATED = "DEDICATED"
 TRIP_KIND_ALONG = "ALONG"
@@ -100,16 +101,14 @@ NO_SALES_ALERT_DAY = 7
 REMOVAL_DAY = 15
 REMOVAL_FEE = Decimal("35")          # вывоз единицы на хаб, дни 15+
 
-# --- Продавец: комиссии, логистика, налог (бизнес-модель v0.3, раздел 8.1) ---
+# --- Продавец: комиссии, логистика (ANALYTICS.md A46–A48, контракт API) -------
 MP_COMMISSION_PCT = Decimal("0.15")  # комиссия маркетплейса
-ACQUIRING_PCT = Decimal("0.015")     # эквайринг
-SELLER_LOGISTICS_FEE = {             # логистика до покупателя, без наценки за mesh
-    "S": Decimal("65"),
-    "M": Decimal("95"),
-}
+ACQUIRING_PCT = Decimal("0.015")    # расширенный расчёт v0.3
+SELLER_LOGISTICS_FEE = Decimal("60")  # тариф логистики продавцу × freight_factor
 RETURN_LOGISTICS_FEE = Decimal("50")  # обратная логистика при отказе
 RETURN_RATE = Decimal("0.05")         # доля возвратов
-SELLER_TAX_PCT = Decimal("0.06")      # УСН 6% с выручки (допущение команды)
+SELLER_TAX_PCT = Decimal("0.06")    # расширенный расчёт v0.3
+TRUNK_STUB_COST = Decimal("120")    # дальний заказ через хаб
 
 # --- Пилот (бизнес-модель v0.3, раздел 11) -----------------------------------
 PILOT_FIXED_COST_MONTH = Decimal("60000")
@@ -150,7 +149,7 @@ ASSUMPTIONS: list[dict[str, object]] = [
     {"code": "zone.yellow", "name": "Порог зоны YELLOW", "value": 7, "unit": "заказов/день"},
     {"code": "seller.commission", "name": "Комиссия маркетплейса", "value": 15, "unit": "%"},
     {"code": "seller.acquiring", "name": "Эквайринг", "value": 1.5, "unit": "%"},
-    {"code": "seller.logistics", "name": "Логистика до покупателя (S / M)", "value": "65 / 95", "unit": "₽/заказ"},
+    {"code": "seller.logistics", "name": "Базовый тариф логистики продавцу × коэффициент перевозки", "value": float(SELLER_LOGISTICS_FEE), "unit": "₽/заказ"},
     {"code": "seller.return_logistics", "name": "Обратная логистика при отказе", "value": 50, "unit": "₽/ед."},
     {"code": "seller.tax", "name": "Налог продавца (УСН с выручки)", "value": 6, "unit": "%"},
     {"code": "storage.removal_fee", "name": "Вывоз неликвида на хаб, 15+ дни", "value": 35, "unit": "₽/ед."},

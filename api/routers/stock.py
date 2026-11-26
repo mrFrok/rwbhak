@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session, joinedload
 from core import ledger as L
 from core import parameters as P
 from ..db import get_db
+from ..errors import DomainError
 from ..models import Batch, Order, Pvz, Sku
 from ..schemas import BatchIn
 from ..services import clock, idempotency, ledger_store
@@ -34,19 +35,18 @@ def receive_batch(
         raise HTTPException(404, "SKU не найден")
     if pvz is None:
         raise HTTPException(404, "ПВЗ не найден")
+    if body.seller_id is not None and body.seller_id != sku.seller_id:
+        raise DomainError(400, "SELLER_MISMATCH", "SKU не принадлежит указанному продавцу")
     if body.declared_class not in {*P.SIZE_CLASSES, P.SPECIAL_SIZE}:
         raise HTTPException(422, "Неизвестный класс габарита")
     actual = body.actual_class or body.declared_class
+    if actual == P.SPECIAL_SIZE or body.declared_class == P.SPECIAL_SIZE or sku.special:
+        raise DomainError(409, "SIZE_NOT_ALLOWED", "Этот товар не допускается к хранению в ПВЗ")
     if actual not in P.SIZE_CLASSES:
         raise HTTPException(422, "Неизвестный фактический класс габарита")
-    # Бизнес-модель v0.3: пересчёт класса при расхождении; L — отказ в mesh.
-    if actual == "L" and actual != body.declared_class:
-        raise HTTPException(
-            409,
-            "Фактический класс L: товар не допускается к хранению в ПВЗ, только через хаб",
-        )
-    if not P.get_size(actual).mesh_allowed or sku.special:
-        raise HTTPException(409, "Этот товар не допускается к хранению в ПВЗ")
+    size = P.get_size(actual)
+    if not size.mesh_allowed:
+        raise DomainError(409, "SIZE_NOT_ALLOWED", "Этот товар не допускается к хранению в ПВЗ")
 
     at = clock.now(db)
     candidates = db.scalars(select(Batch).where(
@@ -60,19 +60,24 @@ def receive_batch(
         if age >= P.REMOVAL_DAY or (age >= P.NO_SALES_ALERT_DAY and sold is None):
             raise HTTPException(409, "Пополнение заблокировано: есть залежавшийся остаток этого SKU")
 
-    need_um = sku.um * body.qty
-    if need_um > pvz_space(db, pvz.id):
-        raise HTTPException(
-            409,
-            f"Не хватает места: нужно {need_um} УМ, свободно {pvz_space(db, pvz.id)} УМ",
+    need_um = size.um * body.qty
+    free_um = pvz_space(db, pvz.id)
+    if need_um > free_um:
+        raise DomainError(
+            409, "CAPACITY", f"Не хватает места: нужно {need_um} УМ, свободно {free_um} УМ",
+            free_um=free_um, needed_um=need_um,
         )
 
-    if sku.size_class == "M":
-        medium_qty = sum(db.scalars(select(Batch.qty).join(Sku).where(
-            Batch.pvz_id == pvz.id, Sku.size_class == "M",
+    if actual == "M":
+        medium_qty = sum(db.scalars(select(Batch.qty).where(
+            Batch.pvz_id == pvz.id, Batch.actual_class == "M",
         )))
-        if medium_qty * sku.um + need_um > pvz.available_um * P.PVZ_M_UM_SHARE_LIMIT:
-            raise HTTPException(409, "Превышен лимит места под товары класса M")
+        medium_free = max(0, int(pvz.available_um * P.PVZ_M_UM_SHARE_LIMIT) - medium_qty * size.um)
+        if need_um > medium_free:
+            raise DomainError(
+                409, "CAPACITY", "Превышен лимит места под товары класса M",
+                free_um=medium_free, needed_um=need_um,
+            )
     batch = Batch(
         sku_id=sku.id,
         pvz_id=pvz.id,
@@ -95,7 +100,7 @@ def receive_batch(
         "qty": batch.qty,
         "qty_free": batch.qty_free,
         "received_at": batch.received_at.isoformat(),
-        "size_class": sku.size_class,
+        "size_class": actual,
         "declared_class": batch.declared_class,
         "actual_class": batch.actual_class,
         "um_total": need_um,

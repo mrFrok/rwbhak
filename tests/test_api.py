@@ -13,6 +13,15 @@ def _sku(client, size="S", special=False):
     raise AssertionError("нет подходящего SKU")
 
 
+def _sku_at(client, pvz_id, size="S"):
+    """SKU, который реально лежит в выбранном ПВЗ (в сиде у точек разный ассортимент)."""
+    stock = client.get(f"/api/pvz/{pvz_id}/stock").json()
+    for row in stock["batches"]:
+        if row["size_class"] == size and row["qty_free"] > 0:
+            return next(sku for sku in client.get("/api/skus").json() if sku["id"] == row["sku_id"])
+    raise AssertionError(f"нет остатка класса {size} в ПВЗ {pvz_id}")
+
+
 def _order(client, name, **payload):
     response = client.post("/api/orders", json=payload, headers=key(name))
     assert response.status_code == 201, response.text
@@ -27,7 +36,7 @@ def test_health_and_params(client):
 
 
 def test_city_order_mode_b_at_95_rubles(client):
-    sku = _sku(client)
+    sku = _sku_at(client, 3)
     order = _order(client, "b", sku_id=sku["id"], buyer_pvz_id=1, source_pvz_id=3)
     assert order["mode"] == "B"
     assert order["trip_id"] == 1
@@ -81,14 +90,14 @@ def test_mode_a_from_shelf(client):
 
 
 def test_far_order_goes_through_hub(client):
-    sku = _sku(client)
-    order = _order(client, "far", sku_id=sku["id"], buyer_pvz_id=5, source_pvz_id=3)
+    sku = _sku_at(client, 1)
+    order = _order(client, "far", sku_id=sku["id"], buyer_pvz_id=5)
     assert order["mode"] == "C"
     assert "distance" in order["decision"]["blocked_by"]
 
 
 def test_small_along_trip_is_not_paid(client):
-    sku = _sku(client)
+    sku = _sku_at(client, 4)
     order = _order(client, "small", sku_id=sku["id"], buyer_pvz_id=2, source_pvz_id=4)
     assert order["mode"] == "C"
     assert "trip" in order["decision"]["blocked_by"]
@@ -96,8 +105,8 @@ def test_small_along_trip_is_not_paid(client):
 
 
 def test_list_trips_and_fallback_after_failure(client):
-    assert len(client.get("/api/trips").json()) == 2
-    sku = _sku(client)
+    assert len(client.get("/api/trips").json()) == 3
+    sku = _sku_at(client, 3)
     order = _order(client, "before-failure", sku_id=sku["id"], buyer_pvz_id=1, source_pvz_id=3)
     response = client.post("/api/trips/1/fail", headers=key("fail"))
     assert response.status_code == 200, response.text
@@ -109,7 +118,7 @@ def test_list_trips_and_fallback_after_failure(client):
 
 
 def test_full_cycle_b_and_ledger_balances(client):
-    sku = _sku(client)
+    sku = _sku_at(client, 3)
     order = _order(client, "full", sku_id=sku["id"], buyer_pvz_id=1, source_pvz_id=3)
     oid = order["id"]
 
@@ -178,7 +187,7 @@ def test_long_storage_alerts_and_blocks_replenishment(client):
 
 
 def test_idempotency_replays_and_conflicts(client):
-    sku = _sku(client)
+    sku = _sku_at(client, 3)
     payload = {"sku_id": sku["id"], "buyer_pvz_id": 1, "source_pvz_id": 3}
     first = client.post("/api/orders", json=payload, headers=key("idem"))
     second = client.post("/api/orders", json=payload, headers=key("idem"))

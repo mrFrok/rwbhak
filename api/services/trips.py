@@ -11,6 +11,8 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from core import ledger as L
 from core import parameters as P
 from core.economics import mesh_saving
+from core.plan import plan_trip
+from ..errors import DomainError
 from ..models import Order, Pvz, Trip
 from ..money import from_kop, plain, rub, to_kop
 from . import ledger_store
@@ -95,20 +97,126 @@ def plan(
     return trip_payload(trip)
 
 
+def plan(db: Session, *, departs_at: datetime) -> dict[str, object]:
+    """Подтвердить запланированные рейсы и добрать очередь (контракт API).
+
+    Режим B при создании заказа предварительный. Здесь каждый запланированный
+    рейс проверяется на окупаемость: прошедший подтверждается, непрошедший
+    отправляет заказы в хаб с причиной TRIP_NOT_PAYING. Заказы без рейса
+    (например, после сбоя) группируются по коридору, и `core.plan.plan_trip`
+    выбирает вариант: попутный, выделенный, оба или ничего.
+    """
+    trips_out: list[dict[str, object]] = []
+    rerouted: list[dict[str, object]] = []
+
+    for trip in db.scalars(select(Trip).where(Trip.status == "PLANNED").order_by(Trip.id)):
+        orders = [order for order in trip.orders if order.status in ("RESERVED", "PICKED")]
+        if not orders:
+            continue
+        saving = sum(mesh_saving(order.batch.actual_class) for order in orders)
+        cost = from_kop(trip.cost_kop)
+        if saving >= cost and trip.used_um <= trip.capacity_um:
+            trips_out.append(
+                {
+                    "trip_id": trip.id,
+                    "kind": trip.kind,
+                    "order_ids": [order.id for order in orders],
+                    "um": trip.used_um,
+                    "cost": rub(trip.cost_kop),
+                    "saving": float(saving),
+                    "net": float(saving) - rub(trip.cost_kop),
+                }
+            )
+            continue
+        for order in orders:
+            order.mode = "C"
+            order.status = "ROUTED_HUB"
+            order.trip_id = None
+            order.decision_json = {
+                **order.decision_json,
+                "mode": "C",
+                "blocked_by": ["trip"],
+                "reason": "TRIP_NOT_PAYING",
+            }
+            rerouted.append({"order_id": order.id, "reason": "TRIP_NOT_PAYING", "mode": "C"})
+
+    queue = db.scalars(
+        select(Order)
+        .options(joinedload(Order.source_pvz), joinedload(Order.buyer_pvz), joinedload(Order.batch))
+        .where(Order.mode == "B", Order.status == "RESERVED", Order.trip_id.is_(None))
+        .order_by(Order.created_at, Order.id)
+    ).all()
+    corridors: dict[tuple[int, int], list[Order]] = {}
+    for order in queue:
+        corridors.setdefault((order.source_pvz_id, order.buyer_pvz_id), []).append(order)
+
+    for (source_id, buyer_id), orders in sorted(corridors.items()):
+        zone = find_zone(db, orders[0].source_pvz.city_id, orders[0].buyer_pvz.city_id)
+        zone_class = zone.class_ if zone else P.ZONE_RED
+        outcome = plan_trip([order.batch.actual_class for order in orders], zone_class)
+        covered: set[int] = set()
+        for trip_plan in outcome["trips"]:
+            indices = trip_plan["order_idx"]  # type: ignore[index]
+            chosen = [orders[i] for i in indices]
+            kind = str(trip_plan["kind"])
+            saving = trip_plan["saving"]  # type: ignore[index]
+            cost = P.TRIP_KIND_COST[kind]
+            trip = Trip(
+                from_pvz_id=source_id,
+                to_pvz_id=buyer_id,
+                kind=kind,
+                departs_at=departs_at,
+                cost_kop=to_kop(cost),
+                capacity_um=P.TRIP_ALONG_CAPACITY_UM if kind == P.TRIP_KIND_ALONG else P.TRIP_CAPACITY_UM,
+                status="PLANNED",
+            )
+            db.add(trip)
+            db.flush()
+            for order in chosen:
+                order.trip_id = trip.id
+            covered.update(order.id for order in chosen)
+            trips_out.append(
+                {
+                    "trip_id": trip.id,
+                    "kind": kind,
+                    "order_ids": [order.id for order in chosen],
+                    "um": sum(order.um for order in chosen),
+                    "cost": rub(trip.cost_kop),
+                    "saving": float(saving),
+                    "net": float(saving) - rub(trip.cost_kop),
+                }
+            )
+        for index in outcome["leftover"]:  # type: ignore[index]
+            order = orders[index]
+            if order.id in covered:
+                continue
+            order.mode = "C"
+            order.status = "ROUTED_HUB"
+            order.decision_json = {
+                **order.decision_json,
+                "mode": "C",
+                "blocked_by": ["trip"],
+                "reason": "TRIP_NOT_PAYING",
+            }
+            rerouted.append({"order_id": order.id, "reason": "TRIP_NOT_PAYING", "mode": "C"})
+    db.flush()
+    return {"trips": trips_out, "rerouted": rerouted}
+
+
 def depart(db: Session, trip_id: int, key: str, at: datetime) -> dict[str, object]:
     trip = _get_trip(db, trip_id)
     if trip.status != "PLANNED":
         raise HTTPException(409, f"Рейс в статусе {trip.status} нельзя отправить")
     if not trip.orders:
         raise HTTPException(409, "Пустой рейс отправлять нельзя")
-    if sum(mesh_saving(order.sku.size_class) for order in trip.orders) < from_kop(trip.cost_kop):
-        raise HTTPException(409, "Рейс ещё не окупается: недостаточно заказов")
+    if sum(mesh_saving(order.batch.actual_class) for order in trip.orders) < from_kop(trip.cost_kop):
+        raise DomainError(409, "TRIP_NOT_PAYING", "Рейс ещё не окупается: недостаточно заказов")
     # Сборка выполняется до отправки; явная ручная сборка также доступна.
     for order in trip.orders:
         if order.status == "RESERVED":
             ledger_store.post(
                 db,
-                L.picking(order.sku.size_class, order.source_pvz_id),
+                L.picking(order.batch.actual_class, order.source_pvz_id),
                 f"{key}:pick:{order.id}",
                 at,
                 order.id,

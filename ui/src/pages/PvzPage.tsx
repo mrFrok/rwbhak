@@ -534,6 +534,8 @@ function CreateOrderModal({
   const sourceId = Form.useWatch("source_pvz_id", form);
   const skuId = Form.useWatch("sku_id", form);
   const stock = useStock(open ? sourceId : undefined);
+  const miraPvzId = pvzList.find((item) => item.name.includes("Мира"))?.id;
+  const miraStock = useStock(open ? miraPvzId : undefined);
   const [result, setResult] = useState<Order | null>(null);
 
   const options = useMemo(
@@ -578,12 +580,17 @@ function CreateOrderModal({
       message.warning("Демо-данные не загружены: выполните make seed");
       return;
     }
+    // В сиде у каждого ПВЗ свой ассортимент: берём SKU, который реально лежит
+    // на складе отправителя.
+    const miraSkuId = miraStock.data?.batches.find(
+      (batch) => batch.size_class === "S" && batch.qty_free > 0,
+    )?.sku_id;
     const payload =
       scenario === "B"
-        ? { sku_id: firstSku.id, source_pvz_id: mira.id, buyer_pvz_id: kompros.id }
+        ? { sku_id: miraSkuId ?? firstSku.id, source_pvz_id: mira.id, buyer_pvz_id: kompros.id }
         : scenario === "A"
           ? { sku_id: firstSku.id, source_pvz_id: kompros.id, buyer_pvz_id: kompros.id }
-          : { sku_id: firstSku.id, source_pvz_id: mira.id, buyer_pvz_id: tverskaya.id };
+          : { sku_id: firstSku.id, source_pvz_id: kompros.id, buyer_pvz_id: tverskaya.id };
     form.setFieldsValue({ ...payload, batch_id: undefined });
     submit(payload);
   };

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class BatchIn(BaseModel):
+    seller_id: int | None = None
     sku_id: int
     pvz_id: int
     qty: int = Field(default=1, gt=0, le=500)
@@ -29,7 +30,7 @@ class TripIn(BaseModel):
 
 class TimeIn(BaseModel):
     days: int = Field(default=0, ge=0, le=365)
-    hours: int = Field(default=0, ge=0, le=240)
+    hours: int = Field(default=0, ge=0, le=365 * 24)
 
     @property
     def empty(self) -> bool:

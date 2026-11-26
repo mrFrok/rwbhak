@@ -163,8 +163,26 @@ def shelf_sale_bonus(size_code: str, storage_days: int = P.MESH_STORAGE_DAYS) ->
 
 
 def seller_logistics_fee(size_code: str) -> Decimal:
-    """Логистика до покупателя: фиксированный тариф, не выше хабового."""
-    return P.SELLER_LOGISTICS_FEE.get(size_code, Decimal("0"))
+    """Одинаковый тариф для хаба и mesh: базовая ставка × класс перевозки."""
+    return q(P.SELLER_LOGISTICS_FEE * P.get_size(size_code).freight_factor)
+
+
+def baseline_cost(size_code: str, *, distant: bool) -> Decimal:
+    return q(hub_cost(size_code) + (P.TRUNK_STUB_COST if distant else 0))
+
+
+def seller_order_breakdown(
+    size_code: str, price: Decimal, unit_cost: Decimal, days: int, return_cost: Decimal,
+) -> dict[str, Decimal]:
+    """Финансовая разбивка одного заказа по контракту API."""
+    costs = {
+        "unit_cost": unit_cost,
+        "commission": q(price * P.MP_COMMISSION_PCT),
+        "logistics_fee": seller_logistics_fee(size_code),
+        "storage_fee": seller_storage_fee(size_code, days),
+        "return_cost": return_cost,
+    }
+    return {"price": price, **costs, "margin": q(price - sum(costs.values()))}
 
 
 def seller_margin(
@@ -173,7 +191,7 @@ def seller_margin(
     unit_cost: Decimal,
     days: int = P.MESH_STORAGE_DAYS,
 ) -> dict[str, Decimal]:
-    """Полная юнит-экономика продавца (бизнес-модель v0.3, раздел 9.2).
+    """Расширенная оценка для прежнего демо: включает эквайринг и налог.
 
     Включает комиссию маркетплейса 15%, эквайринг 1,5%, логистику до покупателя,
     платное хранение с 4-го дня, удельный расход на возвраты и налог УСН 6%.
@@ -243,4 +261,3 @@ def pilot_summary(rows: tuple[int, ...] = (40, 62, 66, 100, 116, 150)) -> dict[s
             for orders in rows
         ],
     }
-

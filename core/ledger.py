@@ -83,7 +83,7 @@ def issue(size_code: str, pvz_id: int, mode: str, storage_days: int = P.MESH_STO
     return entries
 
 
-def hub_route(size_code: str) -> list[Entry]:
+def hub_route(size_code: str, *, cost: Decimal | None = None) -> list[Entry]:
     """Режим C: услуги хаба — внутренние затраты маркетплейса.
 
     Показываем одной проводкой «маркетплейс → хаб», чтобы в аналитике было видно
@@ -91,7 +91,7 @@ def hub_route(size_code: str) -> list[Entry]:
     """
     from .economics import hub_cost
 
-    amount = hub_cost(size_code)
+    amount = hub_cost(size_code) if cost is None else cost
     return _pair(MARKETPLACE, "hub", amount, "HUB_ROUTE")
 
 
