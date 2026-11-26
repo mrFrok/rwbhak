@@ -13,6 +13,7 @@ COPY core ./core
 COPY api ./api
 COPY data ./data
 COPY analytic ./analytic
+COPY reports ./reports
 
 EXPOSE 8000
 
