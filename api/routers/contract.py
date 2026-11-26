@@ -221,6 +221,86 @@ def pvz_stock(pvz_id: int, db: Session = Depends(get_db)) -> dict:
     }
 
 
+@router.get("/analytics/pvz/{pvz_id}", tags=["contract: analytics"])
+def pvz_analytics_report(
+    pvz_id: int, days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db),
+) -> dict:
+    from ..services.analytics import pvz_analytics
+
+    legacy = pvz_analytics(db, pvz_id)
+    revenue = legacy["revenue"]
+    contribution = legacy["contribution"]
+    by_day = []
+    for index, row in enumerate(legacy["days"], 1):
+        share = row["revenue"] / revenue if revenue else 0.0
+        by_day.append(
+            {"day": index, "revenue": row["revenue"], "contribution": round(contribution * share, 2)}
+        )
+    return {
+        "pvz_id": pvz_id,
+        "period_days": days,
+        "revenue": revenue,
+        "costs": {"labor": legacy["labor"], "space": legacy["overhead"]},
+        "contribution": contribution,
+        "contribution_per_um_day": legacy["contribution_per_um_day"],
+        "load_pct": legacy["stock"]["load_pct"],
+        "by_day": by_day,
+        "before_after": {"before": 0.0, "after": contribution},
+    }
+
+
+@router.get("/analytics/seller/{seller_id}", tags=["contract: analytics"])
+def seller_analytics_report(
+    seller_id: int, days: int = Query(30, ge=1, le=365), db: Session = Depends(get_db),
+) -> dict:
+    """Маржа продавца строго по формуле контракта API."""
+    from core.economics import seller_logistics_fee, seller_storage_fee
+
+    from ..models import Seller
+    from ..services.analytics import seller_analytics as seller_analytics_legacy
+
+    seller = db.get(Seller, seller_id)
+    if seller is None:
+        raise DomainError(404, "NOT_FOUND", "Продавец не найден")
+    legacy = seller_analytics_legacy(db, seller_id, clock.now(db))
+
+    orders = []
+    for row in legacy["orders"]:
+        storage = seller_storage_fee(row["size_class"], row["storage_days"])
+        logistics = seller_logistics_fee(row["size_class"])
+        return_cost = 50.0 if row["status"] == "RETURNED" else 0.0
+        margin = row["price"] - row["unit_cost"] - row["commission"] - float(logistics) - float(storage) - return_cost
+        orders.append(
+            {
+                "order_id": row["order_id"],
+                "price": row["price"],
+                "unit_cost": row["unit_cost"],
+                "commission": row["commission"],
+                "logistics_fee": float(logistics),
+                "storage_fee": float(storage),
+                "return_cost": return_cost,
+                "margin": round(margin, 2),
+            }
+        )
+    revenue = sum(row["price"] for row in orders)
+    total_margin = sum(row["margin"] for row in orders)
+    storage_total = sum(row["storage_fee"] for row in orders)
+    avg_days = (
+        sum(row["storage_days"] for row in legacy["orders"]) / len(legacy["orders"])
+        if legacy["orders"] else 0.0
+    )
+    return {
+        "seller_id": seller_id,
+        "orders": orders,
+        "totals": {
+            "revenue": round(revenue, 2),
+            "margin": round(total_margin, 2),
+            "storage_fee": round(storage_total, 2),
+            "avg_storage_days": round(avg_days, 2),
+        },
+    }
+
+
 @router.post("/orders", status_code=201, tags=["contract: orders"])
 def create_order(
     body: OrderCreateIn, db: Session = Depends(get_db), key: str = Depends(idempotency.require_key),

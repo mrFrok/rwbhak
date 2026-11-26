@@ -211,3 +211,26 @@ def test_model_endpoints_read_published_report(client):
     assert bad.status_code == 422
     assert bad.json()["error"] == "VALIDATION_ERROR"
     assert "unknown_field" in bad.json()["context"]["fields"]
+
+
+def test_contract_analytics_shapes(client):
+    pvz = client.get("/analytics/pvz/1").json()
+    assert pvz.keys() >= {"pvz_id", "period_days", "revenue", "costs", "contribution",
+                          "contribution_per_um_day", "load_pct", "by_day", "before_after"}
+    assert pvz["pvz_id"] == 1 and pvz["period_days"] == 30
+    assert {"labor", "space"} <= set(pvz["costs"])
+    if pvz["by_day"]:
+        assert {"day", "revenue", "contribution"} <= set(pvz["by_day"][0])
+
+    seller = client.get("/analytics/seller/1").json()
+    assert seller.keys() == {"seller_id", "orders", "totals"}
+    assert {"revenue", "margin", "storage_fee", "avg_storage_days"} <= set(seller["totals"])
+    if seller["orders"]:
+        order = seller["orders"][0]
+        assert order.keys() == {"order_id", "price", "unit_cost", "commission",
+                                "logistics_fee", "storage_fee", "return_cost", "margin"}
+        expected = (order["price"] - order["unit_cost"] - order["commission"]
+                    - order["logistics_fee"] - order["storage_fee"] - order["return_cost"])
+        assert abs(order["margin"] - expected) < 0.02
+        s_sku = next(row for row in client.get("/skus").json() if row["size_class"] == "S")
+        assert order["logistics_fee"] == 60.0 if order["order_id"] else True

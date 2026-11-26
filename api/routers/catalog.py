@@ -89,6 +89,9 @@ def advance_time(
         return cached
     at = clock.now(db)
     new_time = clock.advance(db, days=body.days, hours=body.hours)
+    from ..services.accrual import accrue_storage
+
+    accrue_storage(db, previous=at, current=new_time, at=new_time)
     result = {"now": new_time.isoformat(), "advanced_from": at.isoformat()}
     idempotency.remember(db, key, fp, "time_advanced", result, new_time)
     db.commit()

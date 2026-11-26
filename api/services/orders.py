@@ -318,7 +318,8 @@ def issue(db: Session, order_id: int, key: str, at: datetime) -> dict[str, objec
 
     days = max(0, (at - order.batch.received_at).days)
     size = order.batch.actual_class
-    entries = [] if order.mode == "C" else L.storage(size, order.source_pvz_id, order.seller_id, days)
+    # Хранение уже начислено ежедневно при сдвиге модельных часов.
+    entries = []
     is_on_time = (at - order.created_at).total_seconds() / 3600 <= order.eta_hub_h
     if order.mode == "A" or is_on_time:
         entries += L.issue(size, order.source_pvz_id, order.mode, days)
