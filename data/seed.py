@@ -184,20 +184,27 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
     db.add_all([trip1, trip2, trip3])
     db.flush()
 
-    def add_trip_order(trip: Trip, index: int, buyer_id: int, source_id: int) -> None:
+    def add_trip_order(
+        trip: Trip,
+        index: int,
+        buyer_id: int,
+        source_id: int,
+        *,
+        count: int,
+        wait: float,
+        preloaded: bool = False,
+    ) -> None:
         source_skus = pvz_slices[source_id]
         sku = source_skus[index % 3]
         batch = batches[(sku.id, source_id)]
         if batch.qty_free <= 0:
             return
         batch.qty_free -= 1
-        count = {1: 99, 2: 30, 3: 13}[trip.id]
-        wait = 6 if trip.id == 1 else 30
         decision = decide(OrderRequest(
             size_class="S",
             trip=TripLoad(kind=trip.kind, free_um=trip.capacity_um - count + 1, existing_sizes=("S",) * (count - 1), wait_hours=wait),
         ))
-        if trip.id == 2:
+        if preloaded:
             # Черновая загрузка задана вручную: этот рейс должен не окупаться.
             decision["mode"] = "B"
             decision["reason"] = "Демо: предварительная загрузка, рейс пока не окупается"
@@ -222,11 +229,11 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
         )
 
     for index in range(99):
-        add_trip_order(trip1, index, buyer_id=1, source_id=3)
+        add_trip_order(trip1, index, buyer_id=1, source_id=3, count=99, wait=6)
     for index in range(30):
-        add_trip_order(trip2, index, buyer_id=2, source_id=4)
+        add_trip_order(trip2, index, buyer_id=2, source_id=4, count=30, wait=30, preloaded=True)
     for index in range(13):
-        add_trip_order(trip3, index, buyer_id=2, source_id=1)
+        add_trip_order(trip3, index, buyer_id=2, source_id=1, count=13, wait=30)
     db.flush()
 
     # История: выданные заказы для аналитики ПВЗ и продавца.
