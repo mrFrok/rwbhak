@@ -1,6 +1,6 @@
 import { Alert, Card, Col, Row, Select, Table, Tabs, Tag } from "antd";
 import { useEffect, useMemo, useState } from "react";
-import { useParams, useSellerAnalytics, useSellers } from "../api/hooks";
+import { useParams, useRecommendPvz, useSellerAnalytics, useSellers, useSkus } from "../api/hooks";
 import type { SellerAnalytics } from "../api/types";
 import { Kpi, ModeTag, StatusTag, fmtRub } from "../components/ui";
 
@@ -32,13 +32,23 @@ export default function SellerPage() {
         />
       </div>
 
-      <SellerBody analytics={analytics.data} loading={analytics.isLoading} />
+      <SellerBody sellerId={sellerId} analytics={analytics.data} loading={analytics.isLoading} />
     </div>
   );
 }
 
-function SellerBody({ analytics, loading }: { analytics?: SellerAnalytics; loading: boolean }) {
+function SellerBody({ sellerId, analytics, loading }: { sellerId?: number; analytics?: SellerAnalytics; loading: boolean }) {
   const params = useParams();
+  const skus = useSkus();
+  const sellerSkus = useMemo(
+    () => (skus.data ?? []).filter((sku) => sku.seller_id === sellerId),
+    [skus.data, sellerId],
+  );
+  const [recommendSku, setRecommendSku] = useState<number | undefined>();
+  useEffect(() => {
+    if (recommendSku === undefined && sellerSkus.length) setRecommendSku(sellerSkus[0].id);
+  }, [sellerSkus, recommendSku]);
+  const recommendation = useRecommendPvz(sellerId, recommendSku);
   const storageRows = useMemo(
     () => [
       { key: "1-3", days: "Дни 1–3", seller: "0 ₽", pvz: "3 ₽ × УМ-день", note: "включено" },
@@ -128,6 +138,54 @@ function SellerBody({ analytics, loading }: { analytics?: SellerAnalytics; loadi
                         <span className="num" style={{ color: v >= 0 ? "#16A34A" : "#DC2626", fontWeight: 600 }}>
                           {fmtRub(v)}
                           <span className="muted" style={{ fontWeight: 400 }}> · {row.margin_pct.toFixed(1)}%</span>
+                        </span>
+                      ),
+                    },
+                  ]}
+                />
+              </Card>
+            ),
+          },
+          {
+            key: "recommend",
+            label: "Куда везти",
+            children: (
+              <Card size="small">
+                <div className="row" style={{ alignItems: "center", marginBottom: 12 }}>
+                  <Select
+                    style={{ width: 320 }}
+                    value={recommendSku}
+                    onChange={setRecommendSku}
+                    placeholder="Выберите SKU"
+                    options={sellerSkus.map((sku) => ({
+                      value: sku.id,
+                      label: `${sku.name} · ${sku.size_class}`,
+                    }))}
+                  />
+                  <span className="muted" style={{ fontSize: 13 }}>
+                    {recommendation.data?.note ?? "Балл = спрос × 10 + место × 0.5 − остаток × 4"}
+                  </span>
+                </div>
+                <Table
+                  size="small"
+                  rowKey="pvz_id"
+                  loading={recommendation.isLoading}
+                  dataSource={recommendation.data?.items ?? []}
+                  pagination={false}
+                  columns={[
+                    { title: "ПВЗ", dataIndex: "pvz_name" },
+                    { title: "Город", dataIndex: "city" },
+                    { title: "Спрос за 30 дн", dataIndex: "demand", align: "right" },
+                    { title: "Остаток", dataIndex: "stock", align: "right" },
+                    { title: "Свободно, УМ", dataIndex: "free_um", align: "right" },
+                    {
+                      title: "Балл",
+                      dataIndex: "score",
+                      align: "right",
+                      render: (value: number, row) => (
+                        <span style={{ fontWeight: 600 }}>
+                          {value.toFixed(1)}
+                          {row.hint ? <Tag color="green" style={{ marginLeft: 8 }}>{row.hint}</Tag> : null}
                         </span>
                       ),
                     },

@@ -67,7 +67,13 @@ def main():
         expect(page.get_by_role("columnheader", name="Только выделенные")).to_be_visible()
         page.get_by_role("button", name="Пересчитать").click()
         expect(page.get_by_text("Пересчёт:", exact=False)).to_be_visible()
+        page.get_by_role("tab", name="Прогноз").click()
+        expect(page.get_by_text("Что завезти")).to_be_visible()
+        expect(page.get_by_role("button", name="Завезти").first).to_be_visible()
+
         page.goto(f"{base}/seller", wait_until="domcontentloaded")
+        page.get_by_role("tab", name="Куда везти").click()
+        expect(page.get_by_text(re.compile("Балл = спрос"))).to_be_visible()
         expect(page.get_by_text(re.compile("бизнес-модели v0.3"))).to_be_visible()
         expect(page.get_by_text("Чистая маржа")).to_be_visible()
         expect(page.get_by_role("columnheader", name="Налог")).to_be_visible()
