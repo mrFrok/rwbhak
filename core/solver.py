@@ -101,11 +101,12 @@ def decide(req: OrderRequest) -> dict[str, object]:
         req.zone_class == P.ZONE_YELLOW and trip is not None and trip.kind == P.TRIP_KIND_ALONG
     )
     size_ok = size.mesh_allowed and not req.special
-    space_ok = (
-        trip is not None
-        and req.buyer_free_um >= size.um
-        and trip.free_um >= size.um
-    )
+    if trip is None:
+        space_ok = req.buyer_free_um >= size.um
+        space_actual = f"в ПВЗ {req.buyer_free_um} УМ, рейс не назначен"
+    else:
+        space_ok = req.buyer_free_um >= size.um and trip.free_um >= size.um
+        space_actual = f"в ПВЗ {req.buyer_free_um} УМ, в рейсе {trip.free_um} УМ"
     eta_mesh = (trip.wait_hours + P.MESH_ETA_OVERHEAD_H) if trip else None
     time_ok = eta_mesh is not None and eta_mesh <= eta_hub + P.DELTA_T_H
     price_ok = req.buyer_price_mesh <= req.buyer_price_hub
@@ -116,9 +117,13 @@ def decide(req: OrderRequest) -> dict[str, object]:
     if trip is not None:
         n_after = trip.orders + 1
         cost_mesh = mesh_variable_cost(req.size_class) + trip_cost_per_order(trip.kind, n_after)
+        trip_actual = f"экономия {saved_total:.2f} ₽ на {n_after} заказах"
+        trip_limit = f">= {trip_needed:.2f} ₽"
     else:
         n_after = 0
         cost_mesh = mesh_variable_cost(req.size_class)
+        trip_actual = "нет запланированного рейса по этому коридору"
+        trip_limit = "нужен рейс ПВЗ → ПВЗ"
 
     filters = [
         _filter("distance", "Расстояние до 300 км", distance_ok,
@@ -128,16 +133,13 @@ def decide(req: OrderRequest) -> dict[str, object]:
                 "GREEN или YELLOW+ALONG"),
         _filter("size", "Габарит допускается в mesh", size_ok,
                 f"{req.size_class}{' / особый' if req.special else ''}", "S или M, не особый"),
-        _filter("space", "Есть свободное место", space_ok,
-                f"в ПВЗ {req.buyer_free_um} УМ, в рейсе {trip.free_um if trip else 0} УМ", f">= {size.um} УМ"),
+        _filter("space", "Есть свободное место", space_ok, space_actual, f">= {size.um} УМ"),
         _filter("time", "Срок не хуже хаба", time_ok,
                 f"{eta_mesh:.0f} ч" if eta_mesh is not None else "нет рейса",
                 f"<= {eta_hub} ч"),
         _filter("price", "Цена покупателя не растёт", price_ok,
                 f"{req.buyer_price_mesh} <= {req.buyer_price_hub}", "mesh не дороже"),
-        _filter("trip", "Рейс окупается", trip_ok,
-                f"экономия {saved_total:.2f} ₽ на {n_after} заказах",
-                f">= {trip_needed:.2f} ₽"),
+        _filter("trip", "Рейс окупается", trip_ok, trip_actual, trip_limit),
     ]
 
     blocked = [f.code for f in filters if not f.ok]
