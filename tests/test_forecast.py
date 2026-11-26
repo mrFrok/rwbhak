@@ -34,3 +34,29 @@ def test_recommendation_rejects_foreign_sku(client):
     sku = next(row for row in client.get("/api/skus").json() if row["seller_id"] != 1)
     response = client.get(f"/api/seller/1/recommend-pvz", params={"sku_id": sku["id"]})
     assert response.status_code == 404
+
+
+def test_seller_has_home_city(client):
+    seller = client.get("/api/sellers").json()[0]
+    assert seller["city"] == "Пермь"
+    assert seller["city_id"] == 1
+
+
+def test_recommendations_respect_seller_geography(client):
+    seller = next(row for row in client.get("/api/sellers").json() if row["city"] == "Пермь")
+    sku = next(
+        row for row in client.get("/api/skus").json() if row["seller_id"] == seller["id"]
+    )
+    data = client.get(
+        f"/api/seller/{seller['id']}/recommend-pvz", params={"sku_id": sku["id"]}
+    ).json()
+    assert data["seller_city"] == "Пермь"
+    cities = {item["city"] for item in data["items"]}
+    assert "Москва" not in cities
+    assert cities <= {"Пермь", "Соликамск"}
+
+
+def test_forecast_ignores_far_demand(client):
+    # В Москву идут только дальние заказы (режим C), локального спроса нет.
+    data = client.get("/api/forecast/pvz/5").json()
+    assert data["items"] == []

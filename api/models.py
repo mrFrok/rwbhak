@@ -65,6 +65,17 @@ class Seller(Base):
     contact: Mapped[str] = mapped_column(String(120), default="")
 
 
+class SellerCity(Base):
+    """Домашний город продавца: откуда он возит товар.
+
+    Отдельная таблица, чтобы добавление не требовало миграции существующей БД.
+    """
+
+    __tablename__ = "seller_city"
+    seller_id: Mapped[int] = mapped_column(ForeignKey("seller.id"), primary_key=True)
+    city_id: Mapped[int] = mapped_column(ForeignKey("city.id"))
+
+
 class Sku(Base):
     __tablename__ = "sku"
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -37,6 +37,8 @@ export interface Seller {
   id: number;
   name: string;
   contact: string;
+  city_id?: number | null;
+  city?: string | null;
 }
 
 export interface Sku {
@@ -329,6 +331,8 @@ export interface ForecastItem {
   incoming: number;
   recommended: number;
   recommended_um: number;
+  seller_city?: string | null;
+  reachable?: boolean;
   reason: string;
 }
 
@@ -357,6 +361,7 @@ export interface SellerRecommendation {
   seller_id: number;
   sku_id: number;
   sku: string;
+  seller_city?: string | null;
   items: PvzRecommendation[];
   note: string;
 }

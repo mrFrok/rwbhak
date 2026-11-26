@@ -12,7 +12,7 @@ from datetime import timedelta
 from sqlalchemy.orm import Session
 
 from api.db import Base, SessionLocal, init_db
-from api.models import Batch, City, Clock, Order, Pvz, Seller, Sku, Trip, Zone
+from api.models import Batch, City, Clock, Order, Pvz, Seller, SellerCity, Sku, Trip, Zone
 from api.money import plain, to_kop
 from api.services import clock, ledger_store
 from core import ledger as L
@@ -89,6 +89,11 @@ def seed(db: Session, reset: bool = False) -> dict[str, int]:
 
     sellers = [Seller(id=i, name=name, contact=f"contact-{i}@example.test") for i, name in enumerate(SELLER_NAMES, 1)]
     db.add_all(sellers)
+    db.flush()
+    # Продавцы 1–5 работают из Перми, 6–10 — из Соликамска (120 км, один коридор).
+    for seller in sellers:
+        city = perm if seller.id <= 5 else solikamsk
+        db.add(SellerCity(seller_id=seller.id, city_id=city.id))
     db.flush()
 
     skus: list[Sku] = []

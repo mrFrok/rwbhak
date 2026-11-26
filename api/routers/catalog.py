@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from core import parameters as P
 from ..db import get_db
-from ..models import Pvz, Seller, Sku
+from ..models import City, Pvz, Seller, SellerCity, Sku
 from ..schemas import TimeIn
 from ..services import clock, idempotency
 
@@ -45,8 +45,22 @@ def list_pvz(db: Session = Depends(get_db)) -> list[dict[str, object]]:
 
 @router.get("/sellers")
 def list_sellers(db: Session = Depends(get_db)) -> list[dict[str, object]]:
-    rows = db.scalars(select(Seller).order_by(Seller.id)).all()
-    return [{"id": seller.id, "name": seller.name, "contact": seller.contact} for seller in rows]
+    rows = db.execute(
+        select(Seller, SellerCity, City)
+        .outerjoin(SellerCity, SellerCity.seller_id == Seller.id)
+        .outerjoin(City, City.id == SellerCity.city_id)
+        .order_by(Seller.id)
+    ).all()
+    return [
+        {
+            "id": seller.id,
+            "name": seller.name,
+            "contact": seller.contact,
+            "city_id": city.id if city else None,
+            "city": city.name if city else None,
+        }
+        for seller, _link, city in rows
+    ]
 
 
 @router.get("/skus")

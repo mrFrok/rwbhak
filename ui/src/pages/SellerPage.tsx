@@ -28,7 +28,10 @@ export default function SellerPage() {
           style={{ width: 260 }}
           value={sellerId}
           onChange={setSellerId}
-          options={(sellers.data ?? []).map((item) => ({ value: item.id, label: item.name }))}
+          options={(sellers.data ?? []).map((item) => ({
+            value: item.id,
+            label: item.city ? `${item.name} · ${item.city}` : item.name,
+          }))}
         />
       </div>
 

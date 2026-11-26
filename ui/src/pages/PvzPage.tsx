@@ -946,6 +946,17 @@ function ForecastTab({ pvzId }: { pvzId?: number }) {
           columns={[
             { title: "SKU", dataIndex: "sku" },
             { title: "Класс", dataIndex: "size_class", width: 70 },
+            {
+              title: "Продавец",
+              key: "seller",
+              width: 150,
+              render: (_: unknown, row: ForecastItem) => (
+                <span className="muted" style={{ fontSize: 12 }}>
+                  {row.seller_city ?? "город не указан"}
+                  {row.reachable === false ? " · только хаб" : ""}
+                </span>
+              ),
+            },
             { title: "Продано", dataIndex: "sold", width: 90, align: "right" },
             { title: "В день", dataIndex: "mean_daily", width: 90, align: "right", render: (v: number) => <span className="num">{v.toFixed(2)}</span> },
             { title: "Прогноз", dataIndex: "forecast_units", width: 90, align: "right" },
@@ -982,7 +993,7 @@ function ForecastTab({ pvzId }: { pvzId?: number }) {
         />
         <div className="muted" style={{ fontSize: 12, marginTop: 10 }}>
           «Завезти» моделирует поставку рекомендуемого количества: сначала в выбранный ПВЗ,
-          остаток автоматически распределяется по другим точкам города и коридора.
+          остаток автоматически распределяется по другим точкам того же города.
         </div>
       </Card>
     </div>

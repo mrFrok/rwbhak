@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from core import ledger as L
 from core import parameters as P
 from ..errors import DomainError
-from ..models import Batch, Order, Pvz, Sku, Zone
+from ..models import Batch, Order, Pvz, Sku
 from ..services import ledger_store
 from ..services.orders import pvz_space
 
@@ -51,24 +51,15 @@ def _capacity_for(db: Session, pvz: Pvz, actual: str) -> int:
 
 
 def _destinations(db: Session, target: Pvz) -> list[Pvz]:
-    """Целевой ПВЗ, затем точки того же города, затем города-коридоры до 300 км."""
+    """Целевой ПВЗ и другие точки только этого же города.
+
+    Перераспределение остатка между городами не делаем: продавец везёт товар
+    в свой город, а межгород — это уже отдельная логистика.
+    """
     same_city = db.scalars(
         select(Pvz).where(Pvz.city_id == target.city_id, Pvz.id != target.id).order_by(Pvz.id)
     ).all()
-    zones = db.scalars(select(Zone).where(Zone.class_ != P.ZONE_RED)).all()
-    reachable_cities: set[int] = set()
-    for zone in zones:
-        if zone.distance_km > P.MAX_MESH_DISTANCE_KM:
-            continue
-        if zone.from_city_id == target.city_id:
-            reachable_cities.add(zone.to_city_id)
-        elif zone.to_city_id == target.city_id:
-            reachable_cities.add(zone.from_city_id)
-    reachable_cities.discard(target.city_id)
-    corridor = db.scalars(
-        select(Pvz).where(Pvz.city_id.in_(reachable_cities)).order_by(Pvz.city_id, Pvz.id)
-    ).all()
-    return [target, *same_city, *corridor]
+    return [target, *same_city]
 
 
 def receive(

@@ -46,7 +46,7 @@ def test_remainder_is_distributed_across_pvz(client):
     assert total == 0
 
 
-def test_distribution_in_same_city_first(client):
+def test_distribution_stays_within_one_city(client):
     sku = _sku(client)
     response = client.post(
         "/api/batches",
@@ -56,11 +56,11 @@ def test_distribution_in_same_city_first(client):
             "qty": 500, "declared_class": "S", "distribute": True,
         },
     ).json()
-    cities = [row["city"] for row in response["allocations"]]
-    # Пермь (ПВЗ 1 и 2) заполняется раньше Соликамска
-    assert cities[0] == "Пермь"
-    if len(cities) > 1:
-        assert cities[0] == cities[1]
+    cities = {row["city"] for row in response["allocations"]}
+    pvz_ids = {row["pvz_id"] for row in response["allocations"]}
+    assert cities == {"Пермь"}
+    assert pvz_ids <= {1, 2}
+    assert response["unplaced_qty"] > 0
 
 
 def test_full_batch_fits_single_pvz_without_distribution(client):
