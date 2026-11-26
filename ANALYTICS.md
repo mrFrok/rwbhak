@@ -39,7 +39,7 @@
 | **Этот файл** — вся аналитика | `ANALYTICS.md` | `make analytics` |
 | Допущения (все входные числа) | `core/parameters.py` | Менять здесь, потом `make report` |
 | Формулы стоимости, вклад ПВЗ, пороги | `core/economics.py` | `make breakeven` |
-| **Имитационная модель** | `core/simulation.py` | `python -c "from core.simulation import simulate; from core.parameters import Params; print(simulate(Params()))"` |
+| **Имитационная модель** | `core/simulation.py` | `python -c "from analytic.simulation import simulate; from analytic.parameters import Params; print(simulate(Params()))"` |
 | Чувствительность, сценарии, карта | `core/analysis.py` | — |
 | Короткий отчёт с графиками | `reports/model_report.md`, `reports/img/` | `make report` |
 | Все результаты в JSON (для интерфейса) | `reports/results.json`, `reports/experiments.json` | — |

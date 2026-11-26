@@ -12,6 +12,7 @@ RUN pip install -r requirements.txt
 COPY core ./core
 COPY api ./api
 COPY data ./data
+COPY analytic ./analytic
 
 EXPOSE 8000
 

@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from core import parameters as params
 
 from ..db import get_db
 from ..errors import DomainError
@@ -30,7 +29,7 @@ router = APIRouter()
 class Assumption(BaseModel):
     id: str
     name: str
-    value: float
+    value: float | int | bool | str | list[int]
     unit: str
     note: str
     kind: str = "допущение команды"
@@ -164,30 +163,9 @@ def _timeline(db: Session, order: Order) -> list[StatusPoint]:
 
 @router.get("/params", tags=["contract: catalog"])
 def assumptions() -> list[Assumption]:
-    # Идентификаторы из ANALYTICS.md. Не выдаём неподключённые параметры за действующие.
-    rows = (
-        ("A01", "hub_proc", params.HUB_PROCESSING, "₽", "Обработка на хабе × коэффициент операций"),
-        ("A02", "hub_leg_seller", params.HUB_LINEHAUL, "₽", "Плечо продавец → хаб"),
-        ("A03", "hub_last_mile", params.HUB_LAST_MILE, "₽", "Последняя миля хаба"),
-        ("A04", "hub_storage_rate", params.HUB_STORAGE_PER_UM_DAY, "₽/УМ·день", "Хранение на хабе"),
-        ("A06", "pvz_receive", params.MESH_ACCEPTANCE, "₽", "Приёмка в ПВЗ"),
-        ("A07", "pvz_storage_rate", params.MESH_STORAGE_PER_UM_DAY, "₽/УМ·день", "Хранение в ПВЗ"),
-        ("A08", "pvz_assemble", params.MESH_PICKING, "₽", "Сборка в ПВЗ"),
-        ("A11", "labor_rate_hour", params.PVZ_LABOR_COST_HOUR, "₽/ч", "Труд сотрудника ПВЗ"),
-        ("A21", "vehicle_um", params.TRIP_CAPACITY_UM, "УМ", "Вместимость выделенного рейса"),
-        ("A24", "eta_hub_h", params.HUB_ETA_H, "ч", "Срок через хаб"),
-        ("A25", "eta_leg_h", params.MESH_ETA_OVERHEAD_H, "ч", "Путь и выдача после отправления"),
-        ("A26", "eta_shelf_h", params.MESH_ETA_SHELF_H, "ч", "Выдача с полки"),
-        ("A27", "delta_t_h", params.DELTA_T_H, "ч", "Допуск по сроку"),
-        ("A39", "pvz_capacity_um", params.PVZ_CAPACITY_UM, "УМ", "Ёмкость склада ПВЗ"),
-        ("A40", "pvz_reserve", params.PVZ_RESERVE_PCT, "доля", "Резерв места"),
-        ("A41", "trunk_stub", params.TRUNK_STUB_COST, "₽", "Заглушка магистрали для дальнего заказа"),
-        ("A42", "fixed_cost_month", params.PILOT_FIXED_COST_MONTH, "₽/мес", "Постоянные расходы пилота"),
-        ("A46", "seller_commission", params.MP_COMMISSION_PCT, "доля", "Комиссия маркетплейса"),
-        ("A47", "seller_logistics_fee", params.SELLER_LOGISTICS_FEE, "₽", "Базовый тариф × коэффициент перевозки"),
-        ("A48", "return_rate", params.RETURN_RATE, "доля", "Модельная доля возвратов"),
-    )
-    return [Assumption(id=code, name=name, value=value, unit=unit, note=note) for code, name, value, unit, note in rows]
+    from analytic.parameters import registry
+
+    return [Assumption(**row) for row in registry()]
 
 
 router.add_api_route("/pvz", catalog.list_pvz, methods=["GET"], tags=["contract: catalog"])
@@ -381,11 +359,12 @@ class SimulateIn(BaseModel):
 @router.post("/simulate", tags=["contract: model"])
 def simulate(body: SimulateIn) -> dict:
     from dataclasses import fields, replace
-    from decimal import Decimal
 
-    from core.model import ModelParams, run_avg
+    from analytic.analysis import run_avg
+    from analytic.parameters import Params
 
-    known = {item.name for item in fields(ModelParams)}
+    base = Params()
+    known = {item.name for item in fields(Params)}
     unknown = sorted(key for key in body.overrides if key not in known)
     if unknown:
         raise DomainError(
@@ -394,15 +373,14 @@ def simulate(body: SimulateIn) -> dict:
         )
     converted = {}
     for key, value in body.overrides.items():
-        current = getattr(ModelParams(), key)
-        if isinstance(current, Decimal):
-            converted[key] = Decimal(str(value))
-        elif isinstance(current, bool):
+        current = getattr(base, key)
+        if isinstance(current, bool):
             converted[key] = bool(value)
+        elif isinstance(current, tuple):
+            converted[key] = tuple(value) if isinstance(value, (list, tuple)) else current
         elif isinstance(current, int):
             converted[key] = int(value)
         else:
             converted[key] = float(value)
-    params = replace(ModelParams(), **converted)
-    result = run_avg(params)
+    result = run_avg(replace(base, **converted))
     return plain(result)

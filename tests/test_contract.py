@@ -195,8 +195,8 @@ def test_model_endpoints_read_published_report(client):
     comparison = client.get("/compare")
     assert comparison.status_code == 200, comparison.text
     data = comparison.json()
-    assert {"hub", "dedicated", "along", "rows"} <= set(data)
-    assert data["along"]["saving_month"] > 0
+    assert {"mesh_dedicated_only", "mesh_with_along"} <= set(data)
+    assert data["mesh_with_along"]["saving_month"] > 0
 
     for path in ("/model/sensitivity", "/model/scenarios", "/model/map"):
         response = client.get(path)
